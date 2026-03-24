@@ -3,9 +3,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { postuser } from "@/actions/server/auth";
+import Swal from "sweetalert2";
+
+interface UserData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  accountType: string;
+  messName: string;
+  selectedMess: string;
+}
 
 export default function SignupPage() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserData>({
     name: "",
     email: "",
     password: "",
@@ -15,17 +27,65 @@ export default function SignupPage() {
     selectedMess: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      confirmPassword: formData.confirmPassword,
-      accountType: formData.accountType,
-      messName: formData.messName,
-      selectedMess: formData.selectedMess,
-    });
+    
+    if (formData.password !== formData.confirmPassword) {
+      Swal.fire({
+        icon: "error",
+        title: "Password Mismatch",
+        text: "Password and confirm password do not match",
+        confirmButtonColor: "#f59e0b",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const user = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        accountType: formData.accountType,
+        messName: formData.messName,
+        selectedMess: formData.selectedMess,
+      };
+      
+      const result = await postuser(user);
+      
+      if (result.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Registration Successful!",
+          text: "Your account has been created successfully",
+          confirmButtonColor: "#f59e0b",
+          timer: 2000,
+          timerProgressBar: true,
+        }).then(() => {
+          window.location.href = "/login";
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Registration Failed",
+          text: result.message || "Something went wrong. Please try again.",
+          confirmButtonColor: "#f59e0b",
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "An error occurred. Please try again later.",
+        confirmButtonColor: "#f59e0b",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -35,7 +95,7 @@ export default function SignupPage() {
     });
   };
 
-  const existingMesses = [
+  const existingMesses: string[] = [
     "Green View Mess",
     "Sea Beach Mess",
     "City Tower Mess",
@@ -71,6 +131,7 @@ export default function SignupPage() {
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="John Doe"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -89,6 +150,7 @@ export default function SignupPage() {
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="you@example.com"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -105,6 +167,7 @@ export default function SignupPage() {
                     onChange={handleChange}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none bg-white"
                     required
+                    disabled={isLoading}
                   >
                     <option value="member">Member</option>
                     <option value="controller">Controller</option>
@@ -131,6 +194,7 @@ export default function SignupPage() {
                       className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       placeholder="Enter your mess name"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -152,9 +216,10 @@ export default function SignupPage() {
                       onChange={handleChange}
                       className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none bg-white"
                       required
+                      disabled={isLoading}
                     >
                       <option value="">Select a mess</option>
-                      {existingMesses.map((mess) => (
+                      {existingMesses.map((mess: string) => (
                         <option key={mess} value={mess}>
                           {mess}
                         </option>
@@ -182,6 +247,7 @@ export default function SignupPage() {
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="••••••••"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -200,6 +266,7 @@ export default function SignupPage() {
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="••••••••"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -209,6 +276,7 @@ export default function SignupPage() {
                   type="checkbox"
                   className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                   required
+                  disabled={isLoading}
                 />
                 <span className="text-gray-600">
                   I agree to the{" "}
@@ -224,9 +292,10 @@ export default function SignupPage() {
 
               <button
                 type="submit"
-                className="w-full bg-amber-500 text-white py-2 rounded-lg font-semibold hover:bg-amber-600 transition-all"
+                disabled={isLoading}
+                className="w-full bg-amber-500 text-white py-2 rounded-lg font-semibold hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign Up
+                {isLoading ? "Creating Account..." : "Sign Up"}
               </button>
             </form>
 
