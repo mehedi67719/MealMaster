@@ -200,10 +200,12 @@ const Navbar = () => {
     }
   };
 
+  const isScrolledStyle = scrolled && userRole.toLowerCase() !== 'controller';
+
   return (
     <>
       <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${
-        scrolled 
+        isScrolledStyle 
           ? 'bg-white/98 backdrop-blur-xl shadow-2xl border-b border-gray-100' 
           : `bg-gradient-to-r ${getGradientColor()}`
       }`}>
@@ -221,8 +223,8 @@ const Navbar = () => {
                   className="relative"
                 >
                   {isMobileMenuOpen ? 
-                    <MdClose size={24} className={scrolled ? 'text-gray-800' : 'text-white'} /> : 
-                    <FiGrid size={22} className={scrolled ? 'text-gray-800' : 'text-white'} />
+                    <MdClose size={24} className={isScrolledStyle ? 'text-gray-800' : 'text-white'} /> : 
+                    <FiGrid size={22} className={isScrolledStyle ? 'text-gray-800' : 'text-white'} />
                   }
                 </motion.div>
               </button>
@@ -234,7 +236,7 @@ const Navbar = () => {
                   className="relative"
                 >
                   <div className={`w-10 h-10 lg:w-11 lg:h-11 rounded-2xl flex items-center justify-center text-2xl font-bold transition-all duration-500 ${
-                    scrolled 
+                    isScrolledStyle 
                       ? `bg-gradient-to-br ${getGradientColorScrolled()} text-white shadow-lg` 
                       : 'bg-white/20 text-white backdrop-blur-md shadow-lg'
                   }`}>
@@ -244,12 +246,12 @@ const Navbar = () => {
                 </motion.div>
                 <div>
                   <h1 className={`text-xl lg:text-2xl font-bold tracking-tight transition-all duration-300 ${
-                    scrolled ? 'text-gray-800' : 'text-white'
+                    isScrolledStyle ? 'text-gray-800' : 'text-white'
                   }`}>
                     MealMaster
                   </h1>
                   <p className={`text-[10px] lg:text-xs tracking-wide transition-all duration-300 ${
-                    scrolled ? 'text-gray-400' : 'text-white/70'
+                    isScrolledStyle ? 'text-gray-400' : 'text-white/70'
                   }`}>
                     {userRole === 'controller' ? 'Control Panel' : userRole === 'manager' ? 'Manager Portal' : 'Member Dashboard'}
                   </p>
@@ -276,10 +278,10 @@ const Navbar = () => {
                       href={item.href}
                       className={`relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-300 group ${
                         active
-                          ? scrolled
+                          ? isScrolledStyle
                             ? getActiveBgColor()
                             : 'bg-white/20 text-white'
-                          : scrolled
+                          : isScrolledStyle
                             ? `text-gray-600 ${getHoverBgColor()}`
                             : 'text-white/80 hover:bg-white/15 hover:text-white'
                       }`}
@@ -292,7 +294,7 @@ const Navbar = () => {
                         <motion.div
                           layoutId="activeNav"
                           className={`absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
-                            scrolled ? 'bg-current' : 'bg-white'
+                            isScrolledStyle ? 'bg-current' : 'bg-white'
                           }`}
                           transition={{ duration: 0.3 }}
                         />
@@ -323,7 +325,7 @@ const Navbar = () => {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsSearchOpen(true)}
                 className={`relative p-2.5 rounded-xl transition-all duration-300 group ${
-                  scrolled 
+                  isScrolledStyle 
                     ? 'text-gray-600 hover:bg-gray-100' 
                     : 'text-white hover:bg-white/15'
                 }`}
@@ -337,7 +339,7 @@ const Navbar = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className={`relative p-2.5 rounded-xl transition-all duration-300 group ${
-                  scrolled 
+                  isScrolledStyle 
                     ? 'text-gray-600 hover:bg-gray-100' 
                     : 'text-white hover:bg-white/15'
                 }`}
@@ -352,14 +354,14 @@ const Navbar = () => {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className={`flex items-center gap-3 p-1.5 pr-4 rounded-2xl transition-all duration-300 ${
-                    scrolled 
+                    isScrolledStyle 
                       ? 'hover:bg-gray-100 border border-gray-200 shadow-sm' 
                       : 'hover:bg-white/15 border border-white/20'
                   }`}
                 >
                   <div className="relative">
                     <div className={`w-9 h-9 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center font-bold text-sm transition-all duration-500 ${
-                      scrolled 
+                      isScrolledStyle 
                         ? `bg-gradient-to-br ${getGradientColorScrolled()} text-white shadow-md` 
                         : 'bg-white/20 text-white backdrop-blur-md'
                     }`}>
@@ -369,18 +371,18 @@ const Navbar = () => {
                   </div>
                   <div className="hidden sm:block text-left">
                     <p className={`text-sm font-semibold transition-colors duration-300 ${
-                      scrolled ? 'text-gray-800' : 'text-white'
+                      isScrolledStyle ? 'text-gray-800' : 'text-white'
                     }`}>
                       {session.user?.name?.split(' ')[0]}
                     </p>
                     <p className={`text-[10px] transition-colors duration-300 capitalize ${
-                      scrolled ? 'text-gray-500' : 'text-white/70'
+                      isScrolledStyle ? 'text-gray-500' : 'text-white/70'
                     }`}>
                       {userRole}
                     </p>
                   </div>
                   <FiChevronDown size={16} className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''} ${
-                    scrolled ? 'text-gray-600' : 'text-white/80'
+                    isScrolledStyle ? 'text-gray-600' : 'text-white/80'
                   }`} />
                 </motion.button>
 
@@ -467,7 +469,7 @@ const Navbar = () => {
               className="lg:hidden overflow-hidden"
             >
               <div className={`px-4 py-6 border-t ${
-                scrolled ? 'bg-white border-gray-100' : `bg-gradient-to-r ${getGradientColor()} bg-opacity-95 border-opacity-20`
+                isScrolledStyle ? 'bg-white border-gray-100' : `bg-gradient-to-r ${getGradientColor()} bg-opacity-95 border-opacity-20`
               }`}>
                 <div className="space-y-2">
                   {menuItems.map((item, index) => {
@@ -484,10 +486,10 @@ const Navbar = () => {
                           href={item.href}
                           className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 ${
                             active
-                              ? scrolled
+                              ? isScrolledStyle
                                 ? getActiveBgColor()
                                 : 'bg-white/20 text-white'
-                              : scrolled
+                              : isScrolledStyle
                                 ? `text-gray-600 hover:bg-gray-50 ${getHoverBgColor()}`
                                 : 'text-white/90 hover:bg-white/10'
                           }`}
