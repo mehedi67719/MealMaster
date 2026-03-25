@@ -84,7 +84,7 @@ const Navbar = () => {
 
   const userRole = session.user?.accountType || 'member';
 
-  // Controller Menu
+
   const controllerMenu = [
     { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/', desc: 'Analytics & Insights' },
     { icon: MdPeople, label: 'Members', href: '/controller/members', desc: 'Manage members' },
@@ -93,10 +93,10 @@ const Navbar = () => {
     { icon: MdPayment, label: 'Deposits', href: '/controller/deposits', desc: 'Track payments' },
     { icon: MdShoppingCart, label: 'Market', href: '/controller/market', desc: 'Shopping list' },
     { icon: MdOutlineAnalytics, label: 'Reports', href: '/controller/reports', desc: 'Data analysis' },
-    { icon: MdOutlineSettings, label: 'Settings', href: '/controller/settings', desc: 'Preferences' },
+ 
   ];
 
-  // Manager Menu
+  
   const managerMenu = [
     { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/manager/dashboard', desc: 'Overview & Stats' },
     { icon: MdAssignment, label: 'Bazaar Entry', href: '/manager/bazaar-entry', desc: 'Daily entries' },
@@ -107,7 +107,7 @@ const Navbar = () => {
     { icon: MdOutlineSettings, label: 'Settings', href: '/manager/settings', desc: 'Preferences' },
   ];
 
-  // Member Menu
+
   const memberMenu = [
     { icon: MdHome, label: 'Home', href: '/member/home', desc: 'Dashboard' },
     { icon: MdOutlineRestaurant, label: 'Meals', href: '/member/meals', desc: 'Track meals' },
