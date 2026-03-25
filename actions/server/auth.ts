@@ -1,9 +1,12 @@
+// src/actions/server/auth.ts
+
 "use server";
 
 import { dbconnection } from "@/Components/lib/dbconnection";
 import bcrypt from "bcrypt";
 
 type UserType = {
+  _id?: any;
   name: string;
   email: string;
   password: string;
@@ -11,8 +14,6 @@ type UserType = {
   messName: string;
   selectedMess: string;
 };
-
-
 
 export const postuser = async (payload: {
   name: string;
@@ -52,32 +53,44 @@ export const postuser = async (payload: {
   return { success: false, message: "Insert failed" };
 };
 
-
-
-
 export const loginuser = async (payload: {
   email: string;
   password: string;
 }) => {
-  const { email, password } = payload;
+  try {
+    const { email, password } = payload;
 
-  const usercollection = await dbconnection<UserType>("users");
+    if (!email || !password) {
+      return { success: false, message: "Email and password are required" };
+    }
 
-  const user = await usercollection.findOne({ email });
-  if (!user) return { success: false, message: "User not found" };
+    const usercollection = await dbconnection<UserType>("users");
 
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return { success: false, message: "Incorrect password" };
+    const user = await usercollection.findOne({ email });
+    
+    if (!user) {
+      return { success: false, message: "User not found" };
+    }
 
-  return {
-    success: true,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      accountType: user.accountType,
-      messName: user.messName,
-      selectedMess: user.selectedMess,
-    },
-  };
+    const match = await bcrypt.compare(password, user.password);
+    
+    if (!match) {
+      return { success: false, message: "Incorrect password" };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user._id?.toString(),
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType,
+        messName: user.messName,
+        selectedMess: user.selectedMess,
+      },
+    };
+  } catch (error) {
+    console.error("Login error:", error);
+    return { success: false, message: "Login failed" };
+  }
 };

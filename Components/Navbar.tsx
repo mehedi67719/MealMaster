@@ -108,7 +108,7 @@ const Navbar = () => {
     { icon: MdFastfood, label: 'Meal Control', href: '/manager/meal-control', desc: 'Track meals' },
     { icon: MdReceipt, label: 'Expenses', href: '/manager/expenses', desc: 'Cost tracking' },
     { icon: MdTrendingUp, label: 'Analytics', href: '/manager/analytics', desc: 'Performance data' },
-    { icon: MdOutlineSettings, label: 'Settings', href: '/manager/settings', desc: 'Preferences' },
+
   ];
 
   const memberMenu = [
@@ -116,7 +116,7 @@ const Navbar = () => {
     { icon: MdOutlineRestaurant, label: 'Meals', href: '/member/meals', desc: 'Track meals' },
     { icon: MdReceipt, label: 'Balance', href: '/member/balance', desc: 'Your balance' },
     { icon: MdHistory, label: 'History', href: '/member/history', desc: 'Past records' },
-    { icon: MdOutlineSettings, label: 'Settings', href: '/member/settings', desc: 'Account settings' },
+
   ];
 
   const getMenuItems = () => {

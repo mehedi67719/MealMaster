@@ -1,497 +1,604 @@
-// src/app/member/meals/page.tsx
 'use client';
+import { motion, AnimatePresence } from 'framer-motion'; 
 
+import { loadMealData, saveMealData } from '@/actions/server/meal';
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { MdChevronLeft, MdChevronRight, MdFileDownload } from 'react-icons/md';
-import { FiCalendar, FiToggleLeft, FiToggleRight } from 'react-icons/fi';
 
-interface MealDay {
-    date: string;
-    day: string;
-    breakfast: boolean;
-    lunch: boolean;
-    dinner: boolean;
-    totalMeals: number;
+
+
+interface DayMeals {
+  breakfast: boolean;
+  lunch: boolean;
+  dinner: boolean;
 }
 
-interface StatCard {
-    label: string;
-    value: number;
-    icon: string;
-    color: string;
+interface MealState {
+  [date: string]: DayMeals;
 }
 
-interface MealStorage {
-    [key: string]: {
-        breakfast: boolean;
-        lunch: boolean;
-        dinner: boolean;
-    };
-}
+const MealPage = () => {
+  const [currentDate] = useState<Date>(new Date());
+  const [mealData, setMealData] = useState<MealState>({});
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showSuccess, setShowSuccess] = useState<boolean>(false);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
-const MealsPage: React.FC = () => {
-    const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-    const [mealDays, setMealDays] = useState<MealDay[]>([]);
-    const [isMounted, setIsMounted] = useState<boolean>(false);
-    const [mealStorage, setMealStorage] = useState<MealStorage>({});
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth() + 1;
+  const monthString = `${year}-${String(month).padStart(2, '0')}`;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDay = new Date(year, month - 1, 1).getDay();
 
-    useEffect(() => {
-        setIsMounted(true);
-        const savedMeals = localStorage.getItem('mealData');
-        if (savedMeals) {
-            try {
-                setMealStorage(JSON.parse(savedMeals));
-            } catch (error) {
-                console.error('Failed to load meal data:', error);
-            }
-        }
-    }, []);
+  useEffect(() => {
+    loadMealDataFromServer();
+  }, []);
 
-    useEffect(() => {
-        if (isMounted) {
-            generateMealDays();
-        }
-    }, [currentMonth, isMounted, mealStorage]);
+  const loadMealDataFromServer = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
 
-    const generateMealDays = (): void => {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-        const lastDay = new Date(year, month + 1, 0).getDate();
+      const result = await loadMealData(monthString, year);
 
-        const days: MealDay[] = [];
-        
-        // Only add days that belong to the current month (1 to lastDay)
-        for (let i = 1; i <= lastDay; i++) {
-            const date = new Date(year, month, i);
-            const dateString = date.toISOString().split('T')[0];
-            const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+      if (result.success && result.data) {
+        setMealData(result.data.meals || {});
+      } else {
+        setError(result.error || 'Failed to load data');
+        setMealData({});
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setError('Failed to load meal data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-            const savedMealData = mealStorage[dateString];
-            const breakfast = savedMealData?.breakfast ?? false;
-            const lunch = savedMealData?.lunch ?? false;
-            const dinner = savedMealData?.dinner ?? false;
+  const saveMealDataToServer = async (updatedMeals: MealState) => {
+    try {
+      setIsLoading(true);
+      setError('');
 
-            days.push({
-                date: dateString,
-                day: dayName,
-                breakfast,
-                lunch,
-                dinner,
-                totalMeals: (breakfast ? 1 : 0) + (lunch ? 1 : 0) + (dinner ? 1 : 0),
-            });
-        }
+      const totalMealsCount = Object.values(updatedMeals).reduce((sum, day) => {
+        return sum + (day.breakfast ? 1 : 0) + (day.lunch ? 1 : 0) + (day.dinner ? 1 : 0);
+      }, 0);
 
-        setMealDays(days);
-    };
+      const payload = {
+        month: monthString,
+        year: year,
+        monthName: currentDate.toLocaleDateString('en-US', { month: 'long' }),
+        meals: updatedMeals,
+        totalDays: daysInMonth,
+        totalMeals: totalMealsCount,
+      };
 
-    const handlePrevMonth = (): void => {
-        const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
-        setCurrentMonth(newDate);
-    };
+      const result = await saveMealData(payload);
 
-    const handleNextMonth = (): void => {
-        const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
-        setCurrentMonth(newDate);
-    };
+      if (result.success) {
+        setSuccessMessage(result.message || '✅ Data saved successfully');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 2000);
+      } else {
+        throw new Error(result.error || 'Failed to save');
+      }
+    } catch (error) {
+      console.error('Error saving data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save meal data');
+      setSuccessMessage('Failed to save!');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const saveMealData = (dateString: string, mealType: 'breakfast' | 'lunch' | 'dinner', value: boolean): void => {
-        const updatedStorage = { ...mealStorage };
-        if (!updatedStorage[dateString]) {
-            updatedStorage[dateString] = { breakfast: false, lunch: false, dinner: false };
-        }
-        updatedStorage[dateString][mealType] = value;
-        setMealStorage(updatedStorage);
-        localStorage.setItem('mealData', JSON.stringify(updatedStorage));
-    };
+  const handleMealToggle = async (date: string, meal: keyof DayMeals) => {
+    const currentValue = mealData[date]?.[meal] ?? false;
+    const newValue = !currentValue;
 
-    const toggleMeal = (dateString: string, mealType: 'breakfast' | 'lunch' | 'dinner'): void => {
-        const currentValue = mealStorage[dateString]?.[mealType] ?? false;
-        saveMealData(dateString, mealType, !currentValue);
-    };
-
-    const toggleAllDays = (mealType: 'breakfast' | 'lunch' | 'dinner', value: boolean): void => {
-        const updatedStorage = { ...mealStorage };
-        mealDays.forEach((day) => {
-            if (!updatedStorage[day.date]) {
-                updatedStorage[day.date] = { breakfast: false, lunch: false, dinner: false };
-            }
-            updatedStorage[day.date][mealType] = value;
-        });
-        setMealStorage(updatedStorage);
-        localStorage.setItem('mealData', JSON.stringify(updatedStorage));
+    const updatedMeals = {
+      ...mealData,
+      [date]: {
+        ...(mealData[date] || { breakfast: false, lunch: false, dinner: false }),
+        [meal]: newValue,
+      },
     };
 
-    if (!isMounted) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50 to-blue-50 pt-6 pb-20 px-3 sm:px-4 md:px-6 lg:px-8 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading...</p>
-                </div>
-            </div>
-        );
+    setMealData(updatedMeals);
+    await saveMealDataToServer(updatedMeals);
+  };
+
+  const handleToggleAllMeals = async (date: string) => {
+    const currentDay = mealData[date] || { breakfast: false, lunch: false, dinner: false };
+    const allOn = currentDay.breakfast && currentDay.lunch && currentDay.dinner;
+    const newStatus = !allOn;
+
+    const updatedMeals = {
+      ...mealData,
+      [date]: {
+        breakfast: newStatus,
+        lunch: newStatus,
+        dinner: newStatus,
+      },
+    };
+
+    setMealData(updatedMeals);
+    await saveMealDataToServer(updatedMeals);
+  };
+
+  const handleMasterToggle = async (mealType: 'breakfast' | 'lunch' | 'dinner') => {
+    const allDays = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      allDays.push(dateStr);
     }
 
-    const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const totalMeals = mealDays.reduce((sum, day) => sum + day.totalMeals, 0);
-    const breakfastCount = mealDays.filter((day) => day.breakfast).length;
-    const lunchCount = mealDays.filter((day) => day.lunch).length;
-    const dinnerCount = mealDays.filter((day) => day.dinner).length;
+    const allOn = allDays.every(date => mealData[date]?.[mealType] === true);
+    const newStatus = !allOn;
 
-    const allBreakfastOn = mealDays.length > 0 && mealDays.every(day => day.breakfast);
-    const allLunchOn = mealDays.length > 0 && mealDays.every(day => day.lunch);
-    const allDinnerOn = mealDays.length > 0 && mealDays.every(day => day.dinner);
+    const updatedMeals = { ...mealData };
+    allDays.forEach(date => {
+      if (!updatedMeals[date]) {
+        updatedMeals[date] = { breakfast: false, lunch: false, dinner: false };
+      }
+      updatedMeals[date][mealType] = newStatus;
+    });
 
-    const statCards: StatCard[] = [
-        { label: 'Total Meals', value: totalMeals, icon: '🍽️', color: 'from-emerald-500 to-teal-500' },
-        { label: 'Breakfast', value: breakfastCount, icon: '🍳', color: 'from-orange-500 to-yellow-500' },
-        { label: 'Lunch', value: lunchCount, icon: '🥗', color: 'from-blue-500 to-cyan-500' },
-        { label: 'Dinner', value: dinnerCount, icon: '🍲', color: 'from-purple-500 to-pink-500' },
-    ];
+    setMealData(updatedMeals);
+    await saveMealDataToServer(updatedMeals);
+  };
 
-    const containerVariants = {
-        hidden: { opacity: 0, y: -20 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.5, staggerChildren: 0.1 },
-        },
-    };
+  const handleMasterToggleAllMeals = async () => {
+    const allDays = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      allDays.push(dateStr);
+    }
 
-    const itemVariants = {
-        hidden: { opacity: 0, y: -20 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-    };
+    const allComplete = allDays.every(date => {
+      const day = mealData[date];
+      return day?.breakfast && day?.lunch && day?.dinner;
+    });
+    const newStatus = !allComplete;
 
+    const updatedMeals = { ...mealData };
+    allDays.forEach(date => {
+      updatedMeals[date] = {
+        breakfast: newStatus,
+        lunch: newStatus,
+        dinner: newStatus,
+      };
+    });
+
+    setMealData(updatedMeals);
+    await saveMealDataToServer(updatedMeals);
+  };
+
+  const getMealStatus = (date: string, meal: keyof DayMeals): boolean => {
+    return mealData[date]?.[meal] ?? false;
+  };
+
+  const getAllMealsStatus = (date: string): boolean => {
+    const day = mealData[date];
+    return day?.breakfast && day?.lunch && day?.dinner;
+  };
+
+  const getPartialMealsStatus = (date: string): boolean => {
+    const day = mealData[date];
+    if (!day) return false;
+    const count = (day.breakfast ? 1 : 0) + (day.lunch ? 1 : 0) + (day.dinner ? 1 : 0);
+    return count > 0 && count < 3;
+  };
+
+  const getMealCount = (date: string): number => {
+    const day = mealData[date];
+    if (!day) return 0;
+    return (day.breakfast ? 1 : 0) + (day.lunch ? 1 : 0) + (day.dinner ? 1 : 0);
+  };
+
+  const getMasterToggleStatus = (mealType: 'breakfast' | 'lunch' | 'dinner'): boolean => {
+    const allDays = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      allDays.push(dateStr);
+    }
+    return allDays.every(date => mealData[date]?.[mealType] === true);
+  };
+
+  const getMasterAllMealsStatus = (): boolean => {
+    const allDays = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      allDays.push(dateStr);
+    }
+    return allDays.every(date => {
+      const day = mealData[date];
+      return day?.breakfast && day?.lunch && day?.dinner;
+    });
+  };
+
+  const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const totalMealsCount = Object.values(mealData).reduce((sum, day) => {
+    return sum + (day.breakfast ? 1 : 0) + (day.lunch ? 1 : 0) + (day.dinner ? 1 : 0);
+  }, 0);
+  const breakfastCount = Object.values(mealData).filter(day => day.breakfast).length;
+  const lunchCount = Object.values(mealData).filter(day => day.lunch).length;
+  const dinnerCount = Object.values(mealData).filter(day => day.dinner).length;
+
+  const allBreakfastOn = getMasterToggleStatus('breakfast');
+  const allLunchOn = getMasterToggleStatus('lunch');
+  const allDinnerOn = getMasterToggleStatus('dinner');
+  const allMealsComplete = getMasterAllMealsStatus();
+
+  const days = [];
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    days.push(dateStr);
+  }
+
+  if (error) {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50 to-blue-50 pt-6 pb-20 px-3 sm:px-4 md:px-6 lg:px-8">
-            <div className="w-full max-w-full lg:max-w-7xl mx-auto">
-
-                <motion.div
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="mb-8"
-                >
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-0">
-                        <motion.div variants={itemVariants} className="flex-1 min-w-0">
-                            <motion.h1
-                                initial={{ opacity: 0, x: -30 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.1, duration: 0.5 }}
-                                className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 truncate"
-                            >
-                                My Meals 🍽️
-                            </motion.h1>
-
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.2 }}
-                                className="flex flex-wrap items-center gap-2 mt-2 sm:mt-3 text-gray-500 text-sm sm:text-base"
-                            >
-                                <FiCalendar size={18} className="text-emerald-600 flex-shrink-0" />
-                                <span className="font-medium">{monthName}</span>
-                                <span className="text-gray-400 hidden sm:inline">•</span>
-                                <span className="text-xs sm:text-sm truncate">
-                                    {currentMonth.toLocaleDateString('en-US', { weekday: 'long' })}
-                                </span>
-                            </motion.div>
-                        </motion.div>
-
-                        <motion.div
-                            variants={itemVariants}
-                            className="flex flex-col sm:flex-row gap-2 w-full md:w-auto"
-                        >
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.2 }}
-                                className="flex items-center gap-1 bg-white rounded-xl border border-gray-200 p-1 flex-shrink-0"
-                            >
-                                <motion.button
-                                    whileHover={{ scale: 1.1, backgroundColor: '#f3f4f6' }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={handlePrevMonth}
-                                    className="p-2 rounded-lg hover:bg-gray-100 transition-all flex-shrink-0"
-                                    aria-label="Previous month"
-                                >
-                                    <MdChevronLeft size={20} className="text-gray-600" />
-                                </motion.button>
-
-                                <motion.span
-                                    key={monthName}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="px-2 sm:px-3 py-2 font-medium text-xs sm:text-sm text-gray-700 min-w-[100px] sm:min-w-[120px] text-center whitespace-nowrap"
-                                >
-                                    {monthName}
-                                </motion.span>
-
-                                <motion.button
-                                    whileHover={{ scale: 1.1, backgroundColor: '#f3f4f6' }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={handleNextMonth}
-                                    className="p-2 rounded-lg hover:bg-gray-100 transition-all flex-shrink-0"
-                                    aria-label="Next month"
-                                >
-                                    <MdChevronRight size={20} className="text-gray-600" />
-                                </motion.button>
-                            </motion.div>
-
-                            <motion.button
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.3 }}
-                                whileHover={{
-                                    scale: 1.05,
-                                    boxShadow: '0 10px 30px rgba(16, 185, 129, 0.3)',
-                                    backgroundColor: '#059669',
-                                }}
-                                whileTap={{ scale: 0.95 }}
-                                className="px-3 sm:px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-xs sm:text-base transition-all shadow-lg flex items-center justify-center gap-2 flex-shrink-0 whitespace-nowrap"
-                            >
-                                <MdFileDownload size={18} className="flex-shrink-0" />
-                                <span className="hidden sm:inline">Export</span>
-                                <span className="sm:hidden">📊</span>
-                            </motion.button>
-                        </motion.div>
-                    </div>
-
-                    <motion.div
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ delay: 0.4, duration: 0.6 }}
-                        className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full mt-6 origin-left"
-                    />
-                </motion.div>
-
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
-                    {statCards.map((stat, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                            className="bg-white rounded-lg sm:rounded-xl border border-gray-200 p-3 sm:p-4 text-center hover:shadow-lg transition-all"
-                        >
-                            <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{stat.icon}</div>
-                            <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{stat.label}</p>
-                            <p className="text-lg sm:text-2xl font-bold text-gray-900">{stat.value}</p>
-                        </motion.div>
-                    ))}
-                </div>
-
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden"
-                >
-                    <div className="border-b border-gray-200 p-4 sm:p-6 bg-gradient-to-r from-emerald-50 to-blue-50">
-                        <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
-                            {monthName} - Meal Calendar
-                        </h2>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1">Click on meals to toggle ON/OFF</p>
-                    </div>
-
-                    <div className="p-4 sm:p-6">
-
-                        <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => toggleAllDays('breakfast', !allBreakfastOn)}
-                                className={`flex items-center justify-between p-3 rounded-lg transition-all ${allBreakfastOn
-                                    ? 'bg-orange-100 border-2 border-orange-500'
-                                    : 'bg-gray-100 border border-gray-300'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xl">🍳</span>
-                                    <span className="font-medium text-sm">All Breakfast</span>
-                                </div>
-                                {allBreakfastOn ? (
-                                    <FiToggleRight size={24} className="text-orange-600" />
-                                ) : (
-                                    <FiToggleLeft size={24} className="text-gray-400" />
-                                )}
-                            </motion.button>
-
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => toggleAllDays('lunch', !allLunchOn)}
-                                className={`flex items-center justify-between p-3 rounded-lg transition-all ${allLunchOn
-                                    ? 'bg-cyan-100 border-2 border-cyan-500'
-                                    : 'bg-gray-100 border border-gray-300'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xl">🥗</span>
-                                    <span className="font-medium text-sm">All Lunch</span>
-                                </div>
-                                {allLunchOn ? (
-                                    <FiToggleRight size={24} className="text-cyan-600" />
-                                ) : (
-                                    <FiToggleLeft size={24} className="text-gray-400" />
-                                )}
-                            </motion.button>
-
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => toggleAllDays('dinner', !allDinnerOn)}
-                                className={`flex items-center justify-between p-3 rounded-lg transition-all ${allDinnerOn
-                                    ? 'bg-emerald-100 border-2 border-emerald-500'
-                                    : 'bg-gray-100 border border-gray-300'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xl">🍲</span>
-                                    <span className="font-medium text-sm">All Dinner</span>
-                                </div>
-                                {allDinnerOn ? (
-                                    <FiToggleRight size={24} className="text-emerald-600" />
-                                ) : (
-                                    <FiToggleLeft size={24} className="text-gray-400" />
-                                )}
-                            </motion.button>
-                        </div>
-
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                            {mealDays.map((mealDay, index) => (
-                                <motion.div
-                                    key={mealDay.date}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: index * 0.02 }}
-                                    className="group border border-gray-200 rounded-lg hover:border-emerald-300 hover:shadow-lg transition-all duration-300 overflow-hidden"
-                                >
-                                    <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div>
-                                                <p className="text-xs sm:text-sm font-bold text-gray-900">
-                                                    {new Date(mealDay.date).getDate()}
-                                                </p>
-                                                <p className="text-xs text-gray-600">{mealDay.day}</p>
-                                            </div>
-                                            <div className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold text-white ${mealDay.totalMeals === 3 ? 'bg-emerald-600' :
-                                                mealDay.totalMeals === 2 ? 'bg-blue-600' :
-                                                    mealDay.totalMeals === 1 ? 'bg-orange-600' :
-                                                        'bg-red-600'
-                                                }`}>
-                                                {mealDay.totalMeals} meals
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-4 space-y-2">
-
-                                        <motion.button
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            onClick={() => toggleMeal(mealDay.date, 'breakfast')}
-                                            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${mealDay.breakfast
-                                                ? 'bg-orange-100 border border-orange-300'
-                                                : 'bg-gray-100 border border-gray-300 opacity-50'
-                                                }`}
-                                        >
-                                            <span className="flex items-center gap-2 text-sm font-medium">
-                                                <span>🍳</span>
-                                                <span className="hidden sm:inline">Breakfast</span>
-                                                <span className="sm:hidden">B</span>
-                                            </span>
-                                            {mealDay.breakfast ? (
-                                                <FiToggleRight size={20} className="text-orange-600 flex-shrink-0" />
-                                            ) : (
-                                                <FiToggleLeft size={20} className="text-gray-400 flex-shrink-0" />
-                                            )}
-                                        </motion.button>
-
-
-                                        <motion.button
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            onClick={() => toggleMeal(mealDay.date, 'lunch')}
-                                            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${mealDay.lunch
-                                                ? 'bg-cyan-100 border border-cyan-300'
-                                                : 'bg-gray-100 border border-gray-300 opacity-50'
-                                                }`}
-                                        >
-                                            <span className="flex items-center gap-2 text-sm font-medium">
-                                                <span>🥗</span>
-                                                <span className="hidden sm:inline">Lunch</span>
-                                                <span className="sm:hidden">L</span>
-                                            </span>
-                                            {mealDay.lunch ? (
-                                                <FiToggleRight size={20} className="text-cyan-600 flex-shrink-0" />
-                                            ) : (
-                                                <FiToggleLeft size={20} className="text-gray-400 flex-shrink-0" />
-                                            )}
-                                        </motion.button>
-
-
-                                        <motion.button
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            onClick={() => toggleMeal(mealDay.date, 'dinner')}
-                                            className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${mealDay.dinner
-                                                ? 'bg-emerald-100 border border-emerald-300'
-                                                : 'bg-gray-100 border border-gray-300 opacity-50'
-                                                }`}
-                                        >
-                                            <span className="flex items-center gap-2 text-sm font-medium">
-                                                <span>🍲</span>
-                                                <span className="hidden sm:inline">Dinner</span>
-                                                <span className="sm:hidden">D</span>
-                                            </span>
-                                            {mealDay.dinner ? (
-                                                <FiToggleRight size={20} className="text-emerald-600 flex-shrink-0" />
-                                            ) : (
-                                                <FiToggleLeft size={20} className="text-gray-400 flex-shrink-0" />
-                                            )}
-                                        </motion.button>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-                </motion.div>
-
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 }}
-                    className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6"
-                >
-                    <div className="bg-gradient-to-br from-orange-500 to-yellow-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white shadow-lg">
-                        <h3 className="text-base sm:text-lg font-bold mb-2">Breakfast</h3>
-                        <p className="text-2xl sm:text-3xl font-bold mb-1">{breakfastCount}</p>
-                        <p className="text-xs sm:text-sm opacity-90">days with breakfast</p>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white shadow-lg">
-                        <h3 className="text-base sm:text-lg font-bold mb-2">Lunch</h3>
-                        <p className="text-2xl sm:text-3xl font-bold mb-1">{lunchCount}</p>
-                        <p className="text-xs sm:text-sm opacity-90">days with lunch</p>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white shadow-lg">
-                        <h3 className="text-base sm:text-lg font-bold mb-2">Dinner</h3>
-                        <p className="text-2xl sm:text-3xl font-bold mb-1">{dinnerCount}</p>
-                        <p className="text-xs sm:text-sm opacity-90">days with dinner</p>
-                    </div>
-                </motion.div>
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-emerald-600 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error Loading Data</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => loadMealDataFromServer()}
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold"
+          >
+            Retry
+          </button>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <div className="inline-flex items-center justify-center mb-4">
+            <div className="text-7xl sm:text-8xl animate-bounce">🍽️</div>
+          </div>
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-3">
+            Monthly Meal Planner
+          </h1>
+          <p className="text-emerald-700 text-base sm:text-lg font-medium mb-6">
+            {monthName} • {daysInMonth} Days • Plan Your Breakfast, Lunch & Dinner
+          </p>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl mx-auto">
+            <div className="bg-gradient-to-r from-orange-500 to-yellow-500 rounded-xl p-3 text-white shadow-lg">
+              <p className="text-xs opacity-90">🌅 Breakfast</p>
+              <p className="text-2xl font-bold">{breakfastCount}</p>
+              <p className="text-[10px]">out of {daysInMonth} days</p>
+            </div>
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl p-3 text-white shadow-lg">
+              <p className="text-xs opacity-90">🍽️ Lunch</p>
+              <p className="text-2xl font-bold">{lunchCount}</p>
+              <p className="text-[10px]">out of {daysInMonth} days</p>
+            </div>
+            <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl p-3 text-white shadow-lg">
+              <p className="text-xs opacity-90">🌙 Dinner</p>
+              <p className="text-2xl font-bold">{dinnerCount}</p>
+              <p className="text-[10px]">out of {daysInMonth} days</p>
+            </div>
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-3 text-white shadow-lg">
+              <p className="text-xs opacity-90">📊 Total</p>
+              <p className="text-2xl font-bold">{totalMealsCount}</p>
+              <p className="text-[10px]">scheduled this month</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl shadow-xl p-6 mb-8"
+        >
+          <div className="text-center mb-6">
+            <h3 className="text-white text-2xl font-bold">Master Controls</h3>
+            <p className="text-emerald-100 text-sm">Control all meals for the entire month at once</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <button
+              onClick={() => handleMasterToggle('breakfast')}
+              disabled={isLoading}
+              className={`flex items-center justify-between p-4 rounded-xl transition-all duration-200 ${
+                allBreakfastOn
+                  ? 'bg-orange-500 text-white shadow-lg'
+                  : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🍳</span>
+                <span className="font-bold">All Breakfast</span>
+              </div>
+              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${
+                allBreakfastOn ? 'bg-white' : 'bg-gray-300'
+              }`}>
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full transition-transform duration-300 ${
+                    allBreakfastOn ? 'translate-x-5 bg-orange-500' : 'translate-x-0.5 bg-gray-600'
+                  }`}
+                />
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleMasterToggle('lunch')}
+              disabled={isLoading}
+              className={`flex items-center justify-between p-4 rounded-xl transition-all duration-200 ${
+                allLunchOn
+                  ? 'bg-cyan-500 text-white shadow-lg'
+                  : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🥗</span>
+                <span className="font-bold">All Lunch</span>
+              </div>
+              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${
+                allLunchOn ? 'bg-white' : 'bg-gray-300'
+              }`}>
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full transition-transform duration-300 ${
+                    allLunchOn ? 'translate-x-5 bg-cyan-500' : 'translate-x-0.5 bg-gray-600'
+                  }`}
+                />
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleMasterToggle('dinner')}
+              disabled={isLoading}
+              className={`flex items-center justify-between p-4 rounded-xl transition-all duration-200 ${
+                allDinnerOn
+                  ? 'bg-purple-500 text-white shadow-lg'
+                  : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🌙</span>
+                <span className="font-bold">All Dinner</span>
+              </div>
+              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${
+                allDinnerOn ? 'bg-white' : 'bg-gray-300'
+              }`}>
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full transition-transform duration-300 ${
+                    allDinnerOn ? 'translate-x-5 bg-purple-500' : 'translate-x-0.5 bg-gray-600'
+                  }`}
+                />
+              </div>
+            </button>
+
+            <button
+              onClick={handleMasterToggleAllMeals}
+              disabled={isLoading}
+              className={`flex items-center justify-between p-4 rounded-xl transition-all duration-200 ${
+                allMealsComplete
+                  ? 'bg-emerald-500 text-white shadow-lg'
+                  : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⭐</span>
+                <span className="font-bold">All Meals</span>
+              </div>
+              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${
+                allMealsComplete ? 'bg-white' : 'bg-gray-300'
+              }`}>
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full transition-transform duration-300 ${
+                    allMealsComplete ? 'translate-x-5 bg-emerald-500' : 'translate-x-0.5 bg-gray-600'
+                  }`}
+                />
+              </div>
+            </button>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-emerald-200 p-6 sm:p-8 lg:p-10 mb-8"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {days.map((date, index) => {
+              if (!date) {
+                return (
+                  <div
+                    key={`empty-${index}`}
+                    className="h-[420px] bg-gradient-to-br from-gray-50 to-emerald-50 rounded-2xl opacity-40 border-2 border-dashed border-emerald-200"
+                  />
+                );
+              }
+
+              const dayNum = parseInt(date.split('-')[2]);
+              const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+              const isToday = date === new Date().toISOString().split('T')[0];
+              const allMealsOn = getAllMealsStatus(date);
+              const partialMeals = getPartialMealsStatus(date);
+              const mealCount = getMealCount(date);
+
+              return (
+                <motion.div
+                  key={date}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.02 }}
+                  whileHover={{ y: -4 }}
+                  className={`rounded-2xl overflow-hidden shadow-lg transition-all duration-300 border-2 ${
+                    isToday
+                      ? 'border-emerald-500 ring-2 ring-emerald-400 ring-offset-2'
+                      : allMealsOn
+                      ? 'border-emerald-400'
+                      : partialMeals
+                      ? 'border-teal-300'
+                      : 'border-gray-200'
+                  }`}
+                >
+                  <div
+                    className={`px-5 py-4 text-white ${
+                      isToday
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                        : allMealsOn
+                        ? 'bg-gradient-to-r from-emerald-600 to-green-600'
+                        : partialMeals
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600'
+                        : 'bg-gradient-to-r from-gray-600 to-gray-700'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <p className="text-sm font-semibold opacity-90">{dayName}</p>
+                      <p className="text-3xl font-black">{dayNum}</p>
+                      {isToday && (
+                        <span className="inline-block mt-2 text-xs font-bold bg-white/30 px-3 py-1 rounded-full backdrop-blur-sm">
+                          TODAY
+                        </span>
+                      )}
+                      {allMealsOn && !isToday && (
+                        <span className="inline-block mt-2 text-xs font-bold bg-white/30 px-3 py-1 rounded-full backdrop-blur-sm">
+                          COMPLETE
+                        </span>
+                      )}
+                      {mealCount > 0 && !allMealsOn && !isToday && (
+                        <span className="inline-block mt-2 text-xs font-bold bg-white/30 px-3 py-1 rounded-full backdrop-blur-sm">
+                          {mealCount}/3 Meals
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3 bg-white">
+                    <button
+                      onClick={() => handleToggleAllMeals(date)}
+                      disabled={isLoading}
+                      className={`w-full py-2.5 px-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                        allMealsOn
+                          ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                          : partialMeals
+                          ? 'bg-teal-400 text-white hover:bg-teal-500 shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                      } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <span className="text-base">
+                        {allMealsOn ? '✓' : partialMeals ? '◐' : '○'}
+                      </span>
+                      {allMealsOn ? 'Turn All Off' : partialMeals ? 'Partial' : 'Turn All On'}
+                    </button>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 hover:border-amber-300 transition-all group">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl group-hover:scale-110 transition-transform">🌅</span>
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">Breakfast</p>
+                            <p className="text-xs text-gray-600">
+                              {getMealStatus(date, 'breakfast') ? '✓ On' : '○ Off'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleMealToggle(date, 'breakfast')}
+                          disabled={isLoading}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
+                            getMealStatus(date, 'breakfast') ? 'bg-emerald-500' : 'bg-gray-300'
+                          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                              getMealStatus(date, 'breakfast') ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 hover:border-green-300 transition-all group">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl group-hover:scale-110 transition-transform">🍽️</span>
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">Lunch</p>
+                            <p className="text-xs text-gray-600">
+                              {getMealStatus(date, 'lunch') ? '✓ On' : '○ Off'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleMealToggle(date, 'lunch')}
+                          disabled={isLoading}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
+                            getMealStatus(date, 'lunch') ? 'bg-emerald-500' : 'bg-gray-300'
+                          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                              getMealStatus(date, 'lunch') ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 hover:border-indigo-300 transition-all group">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl group-hover:scale-110 transition-transform">🌙</span>
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">Dinner</p>
+                            <p className="text-xs text-gray-600">
+                              {getMealStatus(date, 'dinner') ? '✓ On' : '○ Off'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleMealToggle(date, 'dinner')}
+                          disabled={isLoading}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
+                            getMealStatus(date, 'dinner') ? 'bg-emerald-500' : 'bg-gray-300'
+                          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                              getMealStatus(date, 'dinner') ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        <AnimatePresence>
+          {showSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed bottom-8 right-8 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg z-50 font-semibold"
+            >
+              {successMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 };
 
-export default MealsPage;
+export default MealPage;
