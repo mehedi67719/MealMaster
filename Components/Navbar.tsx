@@ -1,3 +1,4 @@
+// src/components/Navbar.tsx
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -44,8 +45,14 @@ const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [scrolled, setScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    setCurrentMonth(months[new Date().getMonth()]);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -70,7 +77,7 @@ const Navbar = () => {
 
   if (status === 'loading') {
     return (
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 h-16 flex items-center justify-center">
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-600 h-16 flex items-center justify-center">
         <div className="relative">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>
         </div>
@@ -84,7 +91,6 @@ const Navbar = () => {
 
   const userRole = session.user?.accountType || 'member';
 
-
   const controllerMenu = [
     { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/', desc: 'Analytics & Insights' },
     { icon: MdPeople, label: 'Members', href: '/controller/members', desc: 'Manage members' },
@@ -93,10 +99,8 @@ const Navbar = () => {
     { icon: MdPayment, label: 'Deposits', href: '/controller/deposits', desc: 'Track payments' },
     { icon: MdShoppingCart, label: 'Market', href: '/controller/market', desc: 'Shopping list' },
     { icon: MdOutlineAnalytics, label: 'Reports', href: '/controller/reports', desc: 'Data analysis' },
- 
   ];
 
-  
   const managerMenu = [
     { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/manager/dashboard', desc: 'Overview & Stats' },
     { icon: MdAssignment, label: 'Bazaar Entry', href: '/manager/bazaar-entry', desc: 'Daily entries' },
@@ -107,9 +111,8 @@ const Navbar = () => {
     { icon: MdOutlineSettings, label: 'Settings', href: '/manager/settings', desc: 'Preferences' },
   ];
 
-
   const memberMenu = [
-    { icon: MdHome, label: 'Home', href: '/member/home', desc: 'Dashboard' },
+    { icon: MdHome, label: 'Home', href: '/', desc: 'Dashboard' },
     { icon: MdOutlineRestaurant, label: 'Meals', href: '/member/meals', desc: 'Track meals' },
     { icon: MdReceipt, label: 'Balance', href: '/member/balance', desc: 'Your balance' },
     { icon: MdHistory, label: 'History', href: '/member/history', desc: 'Past records' },
@@ -129,63 +132,23 @@ const Navbar = () => {
   };
 
   const getGradientColor = () => {
-    switch (userRole.toLowerCase()) {
-      case 'controller':
-        return 'from-emerald-600 via-emerald-600 to-teal-600';
-      case 'manager':
-        return 'from-blue-600 via-blue-600 to-cyan-600';
-      case 'member':
-      default:
-        return 'from-purple-600 via-purple-600 to-pink-600';
-    }
+    return 'from-emerald-600 via-emerald-600 to-emerald-700';
   };
 
   const getGradientColorScrolled = () => {
-    switch (userRole.toLowerCase()) {
-      case 'controller':
-        return 'from-emerald-500 to-teal-500';
-      case 'manager':
-        return 'from-blue-500 to-cyan-500';
-      case 'member':
-      default:
-        return 'from-purple-500 to-pink-500';
-    }
+    return 'from-emerald-600 to-emerald-700';
   };
 
   const getBadgeColor = () => {
-    switch (userRole.toLowerCase()) {
-      case 'controller':
-        return 'bg-emerald-100 text-emerald-700';
-      case 'manager':
-        return 'bg-blue-100 text-blue-700';
-      case 'member':
-      default:
-        return 'bg-purple-100 text-purple-700';
-    }
+    return 'bg-emerald-100 text-emerald-700';
   };
 
   const getActiveBgColor = () => {
-    switch (userRole.toLowerCase()) {
-      case 'controller':
-        return 'bg-emerald-50 text-emerald-600';
-      case 'manager':
-        return 'bg-blue-50 text-blue-600';
-      case 'member':
-      default:
-        return 'bg-purple-50 text-purple-600';
-    }
+    return 'bg-emerald-50 text-emerald-600';
   };
 
   const getHoverBgColor = () => {
-    switch (userRole.toLowerCase()) {
-      case 'controller':
-        return 'hover:bg-emerald-500/10 hover:text-emerald-600';
-      case 'manager':
-        return 'hover:bg-blue-500/10 hover:text-blue-600';
-      case 'member':
-      default:
-        return 'hover:bg-purple-500/10 hover:text-purple-600';
-    }
+    return 'hover:bg-emerald-500/10 hover:text-emerald-600';
   };
 
   const menuItems = getMenuItems();
@@ -238,7 +201,7 @@ const Navbar = () => {
                       ? `bg-gradient-to-br ${getGradientColorScrolled()} text-white shadow-lg` 
                       : 'bg-white/20 text-white backdrop-blur-md shadow-lg'
                   }`}>
-                    🍽️
+                    🍚
                   </div>
                   <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl opacity-0 group-hover:opacity-30 blur transition-all duration-500"></div>
                 </motion.div>
@@ -251,7 +214,7 @@ const Navbar = () => {
                   <p className={`text-[10px] lg:text-xs tracking-wide transition-all duration-300 ${
                     scrolled ? 'text-gray-400' : 'text-white/70'
                   }`}>
-                    {userRole === 'controller' ? 'Control Panel' : userRole === 'manager' ? 'Manager Portal' : 'Member Dashboard'}
+                    {currentMonth} {new Date().getFullYear()}
                   </p>
                 </div>
               </Link>
@@ -376,7 +339,7 @@ const Navbar = () => {
                     <p className={`text-[10px] transition-colors duration-300 capitalize ${
                       scrolled ? 'text-gray-500' : 'text-white/70'
                     }`}>
-                      {userRole}
+                      {currentMonth}
                     </p>
                   </div>
                   <FiChevronDown size={16} className={`transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''} ${
@@ -424,8 +387,8 @@ const Navbar = () => {
                           className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl transition-all duration-200 group"
                           onClick={() => setIsUserMenuOpen(false)}
                         >
-                          <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 transition-all">
-                            <FiUser size={16} className="text-gray-600 group-hover:text-blue-600" />
+                          <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-emerald-100 transition-all">
+                            <FiUser size={16} className="text-gray-600 group-hover:text-emerald-600" />
                           </div>
                           <div>
                             <p className="text-sm font-medium">Profile Settings</p>
@@ -567,7 +530,7 @@ const Navbar = () => {
                         <button
                           key={item}
                           onClick={() => setSearchQuery(item)}
-                          className="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-xl hover:bg-blue-100 hover:text-blue-600 transition-all"
+                          className="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-xl hover:bg-emerald-100 hover:text-emerald-600 transition-all"
                         >
                           {item}
                         </button>

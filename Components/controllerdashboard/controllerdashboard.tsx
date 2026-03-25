@@ -3,7 +3,7 @@
 import BalanceTable from '@/Components/controllerdashboard/BalanceTable';
 import ChartsSection from '@/Components/controllerdashboard/ChartsSection';
 import BazaarChart from '@/Components/controllerdashboard/BazaarChart';
-import RecentActivity from '@/Components/controllerdashboard/RecentActivity';
+
 import Header from '@/Components/controllerdashboard/Header';
 import Sidebar from '@/Components/controllerdashboard/Sidebar';
 import StatsSection from '@/Components/controllerdashboard/StatsSection';
@@ -21,7 +21,7 @@ const ControllerDashboard = () => {
             <ChartsSection />
             <BazaarChart />
             <BalanceTable />
-            <RecentActivity />
+            
           </div>
           <Sidebar />
         </div>

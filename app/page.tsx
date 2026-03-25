@@ -1,6 +1,7 @@
 "use client";
 
 import ControllerDashboard from "@/Components/controllerdashboard/controllerdashboard";
+import MemberHome from "@/Components/member/MemberHome";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,7 +27,8 @@ const Page = () => {
 
   return (
     <div>
-     <ControllerDashboard/>
+     {/* <ControllerDashboard/> */}
+<MemberHome/>
     </div>
   );
 };
