@@ -219,6 +219,7 @@ export async function loadMealData(month: string, year: number) {
         data: {
           meals: {},
           mealsUpToToday: 0,
+          totalMeals: 0,
         },
       };
     }
