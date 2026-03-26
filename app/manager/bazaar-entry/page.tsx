@@ -7,7 +7,6 @@ import { deleteBazar, getBazar, postBazar, putBazar } from '@/actions/server/Baz
 import BazarForm from '@/Components/bazar/BazarForm';
 import BazarCard from '@/Components/bazar/BazarCard';
 
-
 interface BazarItem {
   id: number;
   name: string;
@@ -50,6 +49,10 @@ const BazarPage = () => {
       const result = await getBazar();
       if (result.success) {
         setBazarEntries(result.data || []);
+      } else {
+        if (result.message === 'আপনি লগইন করেননি') {
+          window.location.href = '/login';
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -264,26 +267,24 @@ const BazarPage = () => {
   };
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto bg-white ">
-      <div className=" px-4">
-        <header className="py-6">
-          <div className="flex justify-between items-center">
+    <div className="min-h-screen bg-green-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-green-700">📊 বাজার এন্ট্রি</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-green-700">📊 বাজার এন্ট্রি</h1>
               <p className="text-green-600 text-sm mt-1">দৈনিক বাজার খরচ ট্র্যাক করুন</p>
             </div>
             {!showForm && (
               <button
                 onClick={() => setShowForm(true)}
-                className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-green-700 transition-colors shadow-md"
+                className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
               >
                 <Plus size={20} /> নতুন এন্ট্রি
               </button>
             )}
           </div>
-        </header>
 
-        <main className="py-8">
           {loading && !showForm && (
             <div className="flex justify-center items-center py-20">
               <Loader className="animate-spin text-green-600" size={40} />
@@ -323,18 +324,20 @@ const BazarPage = () => {
 
           {!showForm && !loading && bazarEntries.length === 0 && (
             <div className="text-center py-16">
-              <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto">
-                <p className="text-gray-500 text-lg mb-6">এখনো কোনো এন্ট্রি নেই</p>
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold inline-flex items-center gap-2"
-                >
-                  <Plus size={20} /> প্রথম এন্ট্রি যোগ করুন
-                </button>
+              <div className="max-w-md mx-auto">
+                <div className="bg-gray-50 rounded-2xl p-8">
+                  <p className="text-gray-500 text-lg mb-6">এখনো কোনো এন্ট্রি নেই</p>
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold inline-flex items-center gap-2"
+                  >
+                    <Plus size={20} /> প্রথম এন্ট্রি যোগ করুন
+                  </button>
+                </div>
               </div>
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   );
