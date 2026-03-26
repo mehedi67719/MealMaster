@@ -1,5 +1,3 @@
-// src/actions/server/meals.ts
-
 'use server';
 
 import { dbconnection } from "@/Components/lib/dbconnection";
@@ -17,6 +15,7 @@ interface MealState {
 }
 
 interface MealDocument {
+  _id?: any;
   userEmail: string;
   userName: string;
   month: string;
@@ -28,6 +27,24 @@ interface MealDocument {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const serializeMealData = (data: any): any => {
+  if (!data) return null;
+
+  return {
+    _id: data._id?.toString() || '',
+    userEmail: data.userEmail || '',
+    userName: data.userName || '',
+    month: data.month || '',
+    year: data.year || 0,
+    monthName: data.monthName || '',
+    meals: data.meals || {},
+    totalDays: data.totalDays || 0,
+    totalMeals: data.totalMeals || 0,
+    createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : data.createdAt || '',
+    updatedAt: data.updatedAt instanceof Date ? data.updatedAt.toISOString() : data.updatedAt || '',
+  };
+};
 
 export async function saveMealData(payload: {
   month: string;
@@ -49,7 +66,7 @@ export async function saveMealData(payload: {
 
     const { month, year, monthName, meals, totalDays, totalMeals } = payload;
 
-    if (!month || !year || !meals) {
+    if (!month || year === undefined || !meals) {
       return {
         success: false,
         error: "Missing required fields",
@@ -69,47 +86,52 @@ export async function saveMealData(payload: {
 
     const currentDate = new Date();
 
-    if (existingData) {
-      const result = await mealCollection.updateOne(
-        {
+    try {
+      if (existingData) {
+        await mealCollection.updateOne(
+          {
+            userEmail: userEmail,
+            month: month,
+            year: parseInt(year.toString()),
+          },
+          {
+            $set: {
+              meals: meals,
+              totalDays: totalDays,
+              totalMeals: totalMeals,
+              updatedAt: currentDate,
+            },
+          }
+        );
+
+        return {
+          success: true,
+          message: "✅ Meal data updated successfully",
+          action: "update",
+        };
+      } else {
+        await mealCollection.insertOne({
           userEmail: userEmail,
+          userName: userName,
           month: month,
           year: parseInt(year.toString()),
-        },
-        {
-          $set: {
-            meals: meals,
-            totalDays: totalDays,
-            totalMeals: totalMeals,
-            updatedAt: currentDate,
-          },
-        }
-      );
+          monthName: monthName,
+          meals: meals,
+          totalDays: totalDays,
+          totalMeals: totalMeals,
+          createdAt: currentDate,
+          updatedAt: currentDate,
+        } as MealDocument);
 
-      return {
-        success: true,
-        message: "✅ Meal data updated successfully",
-        action: "update",
-      };
-    } else {
-      const result = await mealCollection.insertOne({
-        userEmail: userEmail,
-        userName: userName,
-        month: month,
-        year: parseInt(year.toString()),
-        monthName: monthName,
-        meals: meals,
-        totalDays: totalDays,
-        totalMeals: totalMeals,
-        createdAt: currentDate,
-        updatedAt: currentDate,
-      });
-
-      return {
-        success: true,
-        message: "✅ Meal data saved successfully",
-        action: "insert",
-      };
+        return {
+          success: true,
+          message: "✅ Meal data saved successfully",
+          action: "insert",
+        };
+      }
+    } catch (dbError) {
+      console.error("Database operation error:", dbError);
+      throw dbError;
     }
   } catch (error) {
     console.error("Error in saveMealData:", error);
@@ -129,13 +151,15 @@ export async function loadMealData(month: string, year: number) {
       return {
         success: false,
         error: "Unauthorized - Please login first",
+        data: null,
       };
     }
 
-    if (!month || !year) {
+    if (!month || year === undefined) {
       return {
         success: false,
         error: "Month and year are required",
+        data: null,
       };
     }
 
@@ -158,9 +182,11 @@ export async function loadMealData(month: string, year: number) {
       };
     }
 
+    const serializedData = serializeMealData(mealData);
+
     return {
       success: true,
-      data: mealData,
+      data: serializedData,
     };
   } catch (error) {
     console.error("Error in loadMealData:", error);
@@ -168,6 +194,7 @@ export async function loadMealData(month: string, year: number) {
     return {
       success: false,
       error: errorMessage,
+      data: null,
     };
   }
 }
