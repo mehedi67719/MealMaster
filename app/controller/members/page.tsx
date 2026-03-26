@@ -24,23 +24,25 @@ const AdminMembersPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'member' | 'controller' | 'manager'>('all');
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     try {
       const result = await alluser();
-      if (result.success) {
-        setMembers((result.data || []) as Member[]);
+      if (result && Array.isArray(result)) {
+        setMembers(result as Member[]);
+      } else {
+        setMembers([]);
       }
     } catch (error) {
       console.error('Error loading users:', error);
-    } finally {
-      setLoading(false);
+      setMembers([]);
     }
   };
 
   useEffect(() => {
     fetchUsers();
+    setLoading(false);
   }, []);
 
   const filteredMembers = members.filter(member => {
@@ -56,21 +58,16 @@ const AdminMembersPage = () => {
   };
 
   const handleMakeController = async (id: string) => {
-    setIsUpdating(true);
+    setUpdatingId(id);
     try {
       const result = await updateUserAccountType(id, 'controller');
       if (result.success) {
-        setMembers((result.data || []) as Member[]);
+        setMembers(prevMembers =>
+          prevMembers.map(m =>
+            m._id === id ? { ...m, accountType: 'controller' } : m
+          )
+        );
         showNotification(`User promoted to Controller`, 'success');
-        await fetchUsers();
-        
-        if (result.shouldLogout) {
-          setTimeout(() => {
-            signOut({ redirect: true, callbackUrl: '/login' });
-          }, 1000);
-          return;
-        }
-        
         await update();
       } else {
         showNotification(result.error || 'Failed to update', 'error');
@@ -78,26 +75,21 @@ const AdminMembersPage = () => {
     } catch (error) {
       showNotification('Error updating user', 'error');
     } finally {
-      setIsUpdating(false);
+      setUpdatingId(null);
     }
   };
 
   const handleMakeManager = async (id: string) => {
-    setIsUpdating(true);
+    setUpdatingId(id);
     try {
       const result = await updateUserAccountType(id, 'manager');
       if (result.success) {
-        setMembers((result.data || []) as Member[]);
+        setMembers(prevMembers =>
+          prevMembers.map(m =>
+            m._id === id ? { ...m, accountType: 'manager' } : m
+          )
+        );
         showNotification(`User promoted to Manager`, 'success');
-        await fetchUsers();
-        
-        if (result.shouldLogout) {
-          setTimeout(() => {
-            signOut({ redirect: true, callbackUrl: '/login' });
-          }, 1000);
-          return;
-        }
-        
         await update();
       } else {
         showNotification(result.error || 'Failed to update', 'error');
@@ -105,26 +97,21 @@ const AdminMembersPage = () => {
     } catch (error) {
       showNotification('Error updating user', 'error');
     } finally {
-      setIsUpdating(false);
+      setUpdatingId(null);
     }
   };
 
   const handleMakeMember = async (id: string) => {
-    setIsUpdating(true);
+    setUpdatingId(id);
     try {
       const result = await updateUserAccountType(id, 'member');
       if (result.success) {
-        setMembers((result.data || []) as Member[]);
+        setMembers(prevMembers =>
+          prevMembers.map(m =>
+            m._id === id ? { ...m, accountType: 'member' } : m
+          )
+        );
         showNotification(`User downgraded to Member`, 'success');
-        await fetchUsers();
-        
-        if (result.shouldLogout) {
-          setTimeout(() => {
-            signOut({ redirect: true, callbackUrl: '/login' });
-          }, 1000);
-          return;
-        }
-        
         await update();
       } else {
         showNotification(result.error || 'Failed to update', 'error');
@@ -132,27 +119,18 @@ const AdminMembersPage = () => {
     } catch (error) {
       showNotification('Error updating user', 'error');
     } finally {
-      setIsUpdating(false);
+      setUpdatingId(null);
     }
   };
 
   const handleDeleteUser = async (id: string) => {
     const user = members.find(m => m._id === id);
-    setIsUpdating(true);
+    setUpdatingId(id);
     try {
       const result = await deleteUser(id);
       if (result.success) {
-        setMembers((result.data || []) as Member[]);
+        setMembers(prevMembers => prevMembers.filter(m => m._id !== id));
         showNotification(`${user?.name} deleted successfully`, 'success');
-        await fetchUsers();
-        
-        if (result.shouldLogout) {
-          setTimeout(() => {
-            signOut({ redirect: true, callbackUrl: '/login' });
-          }, 1000);
-          return;
-        }
-        
         await update();
       } else {
         showNotification(result.error || 'Failed to delete', 'error');
@@ -160,13 +138,14 @@ const AdminMembersPage = () => {
     } catch (error) {
       showNotification('Error deleting user', 'error');
     } finally {
-      setIsUpdating(false);
+      setUpdatingId(null);
     }
   };
 
   const handleRefresh = async () => {
     setLoading(true);
     await fetchUsers();
+    setLoading(false);
     await update();
   };
 
@@ -251,11 +230,11 @@ const AdminMembersPage = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleRefresh}
-              disabled={isUpdating}
+              disabled={updatingId !== null}
               className="p-2 sm:p-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-all"
               title="Refresh Data"
             >
-              <MdRefresh size={20} className={isUpdating ? 'animate-spin' : ''} />
+              <MdRefresh size={20} className={updatingId !== null ? 'animate-spin' : ''} />
             </motion.button>
           </div>
 
@@ -390,8 +369,22 @@ const AdminMembersPage = () => {
                         animate="visible"
                         exit="exit"
                         whileHover={{ backgroundColor: '#f9fafb' }}
-                        className="hover:bg-gray-50 transition-colors"
+                        className="hover:bg-gray-50 transition-colors relative"
                       >
+                        {updatingId === member._id && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-lg z-10"
+                          >
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ repeat: Infinity, duration: 1 }}
+                              className="w-6 h-6 border-2 border-blue-200 border-t-blue-500 rounded-full"
+                            />
+                          </motion.div>
+                        )}
                         <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                           <motion.div whileHover={{ x: 3 }} className="font-medium text-gray-900 text-xs sm:text-sm truncate">
                             {member.name}
@@ -419,7 +412,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeManager(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 disabled:bg-gray-200 text-orange-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Manager"
                                 >
@@ -430,7 +423,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeController(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-200 text-purple-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Controller"
                                 >
@@ -446,7 +439,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeController(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-200 text-purple-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Controller"
                                 >
@@ -457,7 +450,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeMember(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 disabled:bg-gray-200 text-blue-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Member"
                                 >
@@ -473,7 +466,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeManager(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 disabled:bg-gray-200 text-orange-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Manager"
                                 >
@@ -484,7 +477,7 @@ const AdminMembersPage = () => {
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => handleMakeMember(member._id)}
-                                  disabled={isUpdating}
+                                  disabled={updatingId !== null}
                                   className="p-1 sm:p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 disabled:bg-gray-200 text-blue-600 disabled:text-gray-400 rounded-lg transition-all"
                                   title="Make Member"
                                 >
@@ -498,7 +491,7 @@ const AdminMembersPage = () => {
                               whileHover={{ scale: 1.15 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={() => handleDeleteUser(member._id)}
-                              disabled={isUpdating}
+                              disabled={updatingId !== null}
                               className="p-1 sm:p-1.5 md:p-2 bg-red-100 hover:bg-red-200 disabled:bg-gray-200 text-red-600 disabled:text-gray-400 rounded-lg transition-all"
                               title="Delete User"
                             >

@@ -1,80 +1,111 @@
 'use server';
 
 import { dbconnection } from "@/Components/lib/dbconnection";
-import { ObjectId } from "mongodb";
-import { revalidatePath } from "next/cache";
-import { revalidateTag } from "next/cache";
 import { getServerSession } from "next-auth";
+import { ObjectId } from "mongodb";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { authOptions } from "@/Components/lib/authoptions";
 
+interface User {
+  _id: string;
+  email: string;
+  accountType: 'member' | 'controller' | 'manager';
+  messName: string;
+  messSecretCode: string;
+  name?: string;
+  [key: string]: any;
+}
 
-export const alluser = async () => {
+interface UpdateUserResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+  data?: User[];
+  isOwnAccount?: boolean;
+  changedUserEmail?: string;
+}
+
+interface DeleteUserResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+  data?: User[];
+  isOwnAccount?: boolean;
+  changedUserEmail?: string;
+}
+
+interface SessionInvalidationResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+export const alluser = async (): Promise<User[] | null> => {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return {
-        success: false,
-        error: "Unauthorized",
-        data: null,
-      };
+
+    if (!session) {
+      return null;
     }
 
-    const usersCollection = await dbconnection('users');
-    
-    const currentUser = await usersCollection.findOne({
-      email: session.user.email,
+    const usercollection = await dbconnection("users");
+
+    const currentuser = await usercollection.findOne({
+      email: session.user.email
     });
 
-    if (!currentUser) {
-      return {
-        success: false,
-        error: "Current user not found",
-        data: null,
-      };
+    if (!currentuser) {
+      return null;
     }
 
-    const query: Record<string, any> = {};
-    
-    if (currentUser.accountType === 'controller') {
-      query.messSecretCode = currentUser.messSecretCode;
+    if (currentuser.accountType === "controller") {
+      const allusers = await usercollection.find({
+        messName: currentuser.messName,
+        messSecretCode: currentuser.messSecretCode
+      }).toArray();
+
+      return allusers.map(user => ({
+        ...user,
+        _id: user._id instanceof ObjectId ? user._id.toString() : String(user._id)
+      }));
+    } else {
+      return null;
     }
 
-    const result = await usersCollection.find(query).toArray();
-    
-    const formattedResult = result.map((user: any) => ({
-      _id: user._id?.toString() || '',
-      name: user.name || '',
-      email: user.email || '',
-      accountType: user.accountType || 'member',
-      messName: user.messName || '',
-      messSecretCode: user.messSecretCode || '',
-      createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt || '',
-    }));
-
-    return {
-      success: true,
-      data: formattedResult,
-    };
   } catch (error) {
-    console.error("Error fetching users:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to fetch users";
-    return {
-      success: false,
-      error: errorMessage,
-      data: null,
-    };
+    console.log(error);
+    return null;
   }
 };
 
-export const updateUserAccountType = async (userId: string, accountType: 'member' | 'controller' | 'manager') => {
+export const updateUserAccountType = async (
+  userId: string,
+  accountType: 'member' | 'controller' | 'manager'
+): Promise<UpdateUserResponse> => {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
       return {
         success: false,
         error: "Unauthorized",
+      };
+    }
+
+    if (!userId?.trim()) {
+      return {
+        success: false,
+        error: "User ID is required",
+      };
+    }
+
+    let objectId: ObjectId;
+    try {
+      objectId = new ObjectId(userId);
+    } catch {
+      return {
+        success: false,
+        error: "Invalid user ID format",
       };
     }
 
@@ -99,7 +130,7 @@ export const updateUserAccountType = async (userId: string, accountType: 'member
     }
 
     const targetUser = await usersCollection.findOne({
-      _id: new ObjectId(userId),
+      _id: objectId,
     });
 
     if (!targetUser) {
@@ -109,17 +140,24 @@ export const updateUserAccountType = async (userId: string, accountType: 'member
       };
     }
 
-    if (targetUser.messSecretCode !== currentUser.messSecretCode) {
+    if (targetUser.messSecretCode !== currentUser.messSecretCode || targetUser.messName !== currentUser.messName) {
       return {
         success: false,
         error: "You can only manage users in your own mess",
       };
     }
 
+    if (currentUser._id.toString() === targetUser._id.toString() && accountType === 'member') {
+      return {
+        success: false,
+        error: "You cannot demote yourself to member",
+      };
+    }
+
     const isOwnAccount = targetUser.email === session.user.email;
 
     const result = await usersCollection.updateOne(
-      { _id: new ObjectId(userId) },
+      { _id: objectId },
       { $set: { accountType } }
     );
 
@@ -137,10 +175,10 @@ export const updateUserAccountType = async (userId: string, accountType: 'member
 
     return {
       success: true,
-      message: isOwnAccount 
-        ? `Your account type updated to ${accountType}` 
+      message: isOwnAccount
+        ? `Your account type updated to ${accountType}`
         : `User account type updated to ${accountType}`,
-      data: updatedUsers.data,
+      data: updatedUsers || undefined,
       isOwnAccount,
       changedUserEmail: targetUser.email,
     };
@@ -153,14 +191,31 @@ export const updateUserAccountType = async (userId: string, accountType: 'member
   }
 };
 
-export const deleteUser = async (userId: string) => {
+export const deleteUser = async (userId: string): Promise<DeleteUserResponse> => {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
       return {
         success: false,
         error: "Unauthorized",
+      };
+    }
+
+    if (!userId?.trim()) {
+      return {
+        success: false,
+        error: "User ID is required",
+      };
+    }
+
+    let objectId: ObjectId;
+    try {
+      objectId = new ObjectId(userId);
+    } catch {
+      return {
+        success: false,
+        error: "Invalid user ID format",
       };
     }
 
@@ -185,7 +240,7 @@ export const deleteUser = async (userId: string) => {
     }
 
     const targetUser = await usersCollection.findOne({
-      _id: new ObjectId(userId),
+      _id: objectId,
     });
 
     if (!targetUser) {
@@ -195,17 +250,24 @@ export const deleteUser = async (userId: string) => {
       };
     }
 
-    if (targetUser.messSecretCode !== currentUser.messSecretCode) {
+    if (targetUser.messSecretCode !== currentUser.messSecretCode || targetUser.messName !== currentUser.messName) {
       return {
         success: false,
         error: "You can only delete users in your own mess",
       };
     }
 
+    if (currentUser._id.toString() === targetUser._id.toString()) {
+      return {
+        success: false,
+        error: "You cannot delete your own account",
+      };
+    }
+
     const isOwnAccount = targetUser.email === session.user.email;
 
     const result = await usersCollection.deleteOne(
-      { _id: new ObjectId(userId) }
+      { _id: objectId }
     );
 
     if (result.deletedCount === 0) {
@@ -223,7 +285,7 @@ export const deleteUser = async (userId: string) => {
     return {
       success: true,
       message: "User deleted successfully",
-      data: updatedUsers.data,
+      data: updatedUsers || undefined,
       isOwnAccount,
       changedUserEmail: targetUser.email,
     };
@@ -236,10 +298,10 @@ export const deleteUser = async (userId: string) => {
   }
 };
 
-export const invalidateUserSession = async (email: string) => {
+export const invalidateUserSession = async (email: string): Promise<SessionInvalidationResponse> => {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
       return {
         success: false,
@@ -247,10 +309,48 @@ export const invalidateUserSession = async (email: string) => {
       };
     }
 
-    if (!email) {
+    if (!email?.trim() || !email.includes('@')) {
       return {
         success: false,
-        error: "Email is required",
+        error: "Valid email is required",
+      };
+    }
+
+    const usersCollection = await dbconnection('users');
+
+    const currentUser = await usersCollection.findOne({
+      email: session.user.email
+    });
+
+    if (!currentUser) {
+      return {
+        success: false,
+        error: "Current user not found",
+      };
+    }
+
+    if (currentUser.accountType !== 'controller') {
+      return {
+        success: false,
+        error: "Only controllers can invalidate sessions",
+      };
+    }
+
+    const targetUser = await usersCollection.findOne({
+      email: email
+    });
+
+    if (!targetUser) {
+      return {
+        success: false,
+        error: "User not found",
+      };
+    }
+
+    if (currentUser.messSecretCode !== targetUser.messSecretCode || currentUser.messName !== targetUser.messName) {
+      return {
+        success: false,
+        error: "You can only invalidate sessions for users in your mess",
       };
     }
 

@@ -97,7 +97,7 @@ const Navbar = () => {
       { icon: MdOutlineAnalytics, label: 'Reports', href: '/controller/reports', desc: 'Data analysis' },
     ],
     manager: [
-      { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/manager/dashboard', desc: 'Overview & Stats' },
+      { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/', desc: 'Overview & Stats' },
       { icon: MdAssignment, label: 'Bazaar Entry', href: '/manager/bazaar-entry', desc: 'Daily entries' },
       { icon: MdPeople, label: 'Members', href: '/manager/members', desc: 'Member management' },
       { icon: MdFastfood, label: 'Meal Control', href: '/manager/meal-control', desc: 'Track meals' },
