@@ -22,6 +22,7 @@ import {
 } from 'react-icons/md';
 import { FiSearch, FiBell, FiUser, FiChevronDown, FiLogOut, FiGrid } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FaMoneyBillWave } from 'react-icons/fa';
 
 const Navbar = () => {
   const { data: session, status } = useSession();
@@ -100,6 +101,7 @@ const Navbar = () => {
       { icon: MdOutlineSpaceDashboard, label: 'Dashboard', href: '/', desc: 'Overview & Stats' },
       { icon: MdAssignment, label: 'Bazaar Entry', href: '/manager/bazaar-entry', desc: 'Daily entries' },
       { icon: MdPeople, label: 'Members', href: '/manager/members', desc: 'Member management' },
+      { icon: FaMoneyBillWave, label: 'Money', href: '/manager/addmoney', desc: 'Money' },
       { icon: MdFastfood, label: 'Meal Control', href: '/manager/meal-control', desc: 'Track meals' },
       { icon: MdReceipt, label: 'Expenses', href: '/manager/expenses', desc: 'Cost tracking' },
       { icon: MdTrendingUp, label: 'Analytics', href: '/manager/analytics', desc: 'Performance data' },

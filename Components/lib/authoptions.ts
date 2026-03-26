@@ -13,6 +13,8 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) return null;
 
+        // console.log(user)
+
         return {
           id: user.user.id.toString(),
           name: user.user.name,
@@ -20,6 +22,7 @@ export const authOptions: NextAuthOptions = {
           accountType: user.user.accountType,
           messName: user.user.messName,
           selectedMess: user.user.selectedMess,
+          messSecretCode: user.user.messSecretCode,
         };
       },
     }),
@@ -32,6 +35,7 @@ export const authOptions: NextAuthOptions = {
         token.accountType = (user as any).accountType;
         token.messName = (user as any).messName;
         token.selectedMess = (user as any).selectedMess;
+        token.messSecretCode = (user as any).messSecretCode;
       }
       return token;
     },
@@ -43,6 +47,7 @@ export const authOptions: NextAuthOptions = {
         accountType: token.accountType as string,
         messName: token.messName as string,
         selectedMess: token.selectedMess as string,
+         messSecretCode: token.messSecretCode as string,
       };
       return session;
     },

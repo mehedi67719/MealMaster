@@ -58,7 +58,7 @@ export const alluser = async (): Promise<User[] | null> => {
       return null;
     }
 
-    if (currentuser.accountType === "controller") {
+    if (currentuser.accountType === "controller" || currentuser.accountType === "manager") {
       const allusers = await usercollection.find({
         messName: currentuser.messName,
         messSecretCode: currentuser.messSecretCode
