@@ -1,39 +1,53 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdCheckCircle, MdClose, MdDelete, MdPerson, MdSearch, MdSupervisorAccount, MdPersonAdd, MdPersonRemove } from 'react-icons/md';
+import { MdCheckCircle, MdClose, MdDelete, MdPerson, MdSearch, MdSupervisorAccount, MdPersonAdd, MdPersonRemove, MdRefresh } from 'react-icons/md';
+import { useSession, signOut } from 'next-auth/react';
+import { alluser, updateUserAccountType, deleteUser } from '@/actions/server/user';
 
 interface Member {
-  id: number;
+  _id: string;
   name: string;
   email: string;
-  phone: string;
-  status: 'pending' | 'active' | 'inactive';
-  role: 'member' | 'manager' | 'admin';
-  joinDate: string;
-  meals: number;
-  balance: number;
+  accountType: 'member' | 'controller' | 'manager';
+  messName: string;
+  messSecretCode: string;
+  createdAt: string;
 }
 
 const AdminMembersPage = () => {
-  const [members, setMembers] = useState<Member[]>([
-    { id: 1, name: 'Mehedi Hassan', email: 'mehedi@example.com', phone: '01700000001', status: 'active', role: 'member', joinDate: '2024-01-15', meals: 45, balance: -418 },
-    { id: 2, name: 'Rahim Khan', email: 'rahim@example.com', phone: '01700000002', status: 'active', role: 'manager', joinDate: '2024-01-20', meals: 52, balance: -122 },
-    { id: 3, name: 'Karim Ahmad', email: 'karim@example.com', phone: '01700000003', status: 'pending', role: 'member', joinDate: '2024-03-20', meals: 0, balance: 0 },
-    { id: 4, name: 'Sajid Ali', email: 'sajid@example.com', phone: '01700000004', status: 'active', role: 'member', joinDate: '2024-02-10', meals: 38, balance: 184 },
-    { id: 5, name: 'Sofia Khan', email: 'sofia@example.com', phone: '01700000005', status: 'pending', role: 'member', joinDate: '2024-03-22', meals: 0, balance: 0 },
-  ]);
-
+  const { update } = useSession();
+  const { data: session } = useSession();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'active' | 'inactive'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'member' | 'controller' | 'manager'>('all');
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchUsers = async () => {
+    try {
+      const result = await alluser();
+      if (result.success) {
+        setMembers((result.data || []) as Member[]);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || member.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesType = filterType === 'all' || member.accountType === filterType;
+    return matchesSearch && matchesType;
   });
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
@@ -41,54 +55,127 @@ const AdminMembersPage = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleApproveMember = (id: number) => {
-    setMembers(members.map(m => m.id === id ? { ...m, status: 'active' } : m));
-    showNotification('Member approved successfully', 'success');
-  };
-
-  const handleRejectMember = (id: number) => {
-    const member = members.find(m => m.id === id);
-    setMembers(members.filter(m => m.id !== id));
-    showNotification(`${member?.name} rejected`, 'success');
-  };
-
-  const handleMakeManager = (id: number) => {
-    const member = members.find(m => m.id === id);
-    setMembers(members.map(m => m.id === id ? { ...m, role: 'manager' } : m));
-    showNotification(`${member?.name} is now a Manager`, 'success');
-  };
-
-  const handleRemoveManager = (id: number) => {
-    const member = members.find(m => m.id === id);
-    setMembers(members.map(m => m.id === id ? { ...m, role: 'member' } : m));
-    showNotification(`${member?.name} downgraded to Member`, 'success');
-  };
-
-  const handleDeleteMember = (id: number) => {
-    const member = members.find(m => m.id === id);
-    setMembers(members.filter(m => m.id !== id));
-    showNotification(`${member?.name} deleted`, 'success');
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-700 border-green-300';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'inactive':
-        return 'bg-red-100 text-red-700 border-red-300';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-300';
+  const handleMakeController = async (id: string) => {
+    setIsUpdating(true);
+    try {
+      const result = await updateUserAccountType(id, 'controller');
+      if (result.success) {
+        setMembers((result.data || []) as Member[]);
+        showNotification(`User promoted to Controller`, 'success');
+        await fetchUsers();
+        
+        if (result.shouldLogout) {
+          setTimeout(() => {
+            signOut({ redirect: true, callbackUrl: '/login' });
+          }, 1000);
+          return;
+        }
+        
+        await update();
+      } else {
+        showNotification(result.error || 'Failed to update', 'error');
+      }
+    } catch (error) {
+      showNotification('Error updating user', 'error');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin':
+  const handleMakeManager = async (id: string) => {
+    setIsUpdating(true);
+    try {
+      const result = await updateUserAccountType(id, 'manager');
+      if (result.success) {
+        setMembers((result.data || []) as Member[]);
+        showNotification(`User promoted to Manager`, 'success');
+        await fetchUsers();
+        
+        if (result.shouldLogout) {
+          setTimeout(() => {
+            signOut({ redirect: true, callbackUrl: '/login' });
+          }, 1000);
+          return;
+        }
+        
+        await update();
+      } else {
+        showNotification(result.error || 'Failed to update', 'error');
+      }
+    } catch (error) {
+      showNotification('Error updating user', 'error');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleMakeMember = async (id: string) => {
+    setIsUpdating(true);
+    try {
+      const result = await updateUserAccountType(id, 'member');
+      if (result.success) {
+        setMembers((result.data || []) as Member[]);
+        showNotification(`User downgraded to Member`, 'success');
+        await fetchUsers();
+        
+        if (result.shouldLogout) {
+          setTimeout(() => {
+            signOut({ redirect: true, callbackUrl: '/login' });
+          }, 1000);
+          return;
+        }
+        
+        await update();
+      } else {
+        showNotification(result.error || 'Failed to update', 'error');
+      }
+    } catch (error) {
+      showNotification('Error updating user', 'error');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    const user = members.find(m => m._id === id);
+    setIsUpdating(true);
+    try {
+      const result = await deleteUser(id);
+      if (result.success) {
+        setMembers((result.data || []) as Member[]);
+        showNotification(`${user?.name} deleted successfully`, 'success');
+        await fetchUsers();
+        
+        if (result.shouldLogout) {
+          setTimeout(() => {
+            signOut({ redirect: true, callbackUrl: '/login' });
+          }, 1000);
+          return;
+        }
+        
+        await update();
+      } else {
+        showNotification(result.error || 'Failed to delete', 'error');
+      }
+    } catch (error) {
+      showNotification('Error deleting user', 'error');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchUsers();
+    await update();
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'controller':
         return 'bg-purple-100 text-purple-700';
       case 'manager':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-orange-100 text-orange-700';
       case 'member':
         return 'bg-gray-100 text-gray-700';
       default:
@@ -96,9 +183,9 @@ const AdminMembersPage = () => {
     }
   };
 
-  const pendingCount = members.filter(m => m.status === 'pending').length;
-  const activeCount = members.filter(m => m.status === 'active').length;
-  const managerCount = members.filter(m => m.role === 'manager').length;
+  const memberCount = members.filter(m => m.accountType === 'member').length;
+  const controllerCount = members.filter(m => m.accountType === 'controller').length;
+  const managerCount = members.filter(m => m.accountType === 'manager').length;
 
   const containerVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -119,6 +206,18 @@ const AdminMembersPage = () => {
     }),
     exit: { opacity: 0, x: 20 },
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1 }}
+          className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pb-12 md:pb-16">
@@ -145,9 +244,19 @@ const AdminMembersPage = () => {
         >
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
             <div>
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">👥 Member Management</h1>
-              <p className="text-gray-500 text-sm sm:text-base mt-1 sm:mt-2">Manage users, roles, and permissions</p>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">👥 User Management</h1>
+              <p className="text-gray-500 text-sm sm:text-base mt-1 sm:mt-2">Manage users and account types</p>
             </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRefresh}
+              disabled={isUpdating}
+              className="p-2 sm:p-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-all"
+              title="Refresh Data"
+            >
+              <MdRefresh size={20} className={isUpdating ? 'animate-spin' : ''} />
+            </motion.button>
           </div>
 
           <motion.div
@@ -161,7 +270,7 @@ const AdminMembersPage = () => {
               whileHover={{ y: -4, boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
               className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 shadow-md border-l-4 border-blue-500 transition-all"
             >
-              <p className="text-gray-500 text-xs sm:text-sm font-medium">Total Members</p>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium">Total Users</p>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -177,29 +286,30 @@ const AdminMembersPage = () => {
               whileHover={{ y: -4, boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
               className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 shadow-md border-l-4 border-green-500 transition-all"
             >
-              <p className="text-gray-500 text-xs sm:text-sm font-medium">Active Members</p>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium">Members</p>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
                 className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600 mt-1 sm:mt-2"
               >
-                {activeCount}
+                {memberCount}
               </motion.p>
             </motion.div>
 
             <motion.div
               variants={itemVariants}
               whileHover={{ y: -4, boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
-              className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 shadow-md border-l-4 border-yellow-500 transition-all"
+              className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 shadow-md border-l-4 border-orange-500 transition-all"
             >
-              <p className="text-gray-500 text-xs sm:text-sm font-medium">Pending</p>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium">Managers</p>
               <motion.p
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-                className="text-xl sm:text-2xl md:text-3xl font-bold text-yellow-600 mt-1 sm:mt-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 mt-1 sm:mt-2"
               >
-                {pendingCount}
+                {managerCount}
               </motion.p>
             </motion.div>
 
@@ -208,14 +318,14 @@ const AdminMembersPage = () => {
               whileHover={{ y: -4, boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
               className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 shadow-md border-l-4 border-purple-500 transition-all"
             >
-              <p className="text-gray-500 text-xs sm:text-sm font-medium">Managers</p>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium">Controllers</p>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
+                transition={{ delay: 0.5 }}
                 className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-600 mt-1 sm:mt-2"
               >
-                {managerCount}
+                {controllerCount}
               </motion.p>
             </motion.div>
           </motion.div>
@@ -231,7 +341,7 @@ const AdminMembersPage = () => {
               <motion.input
                 whileFocus={{ boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)' }}
                 type="text"
-                placeholder="Search members..."
+                placeholder="Search users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
@@ -239,14 +349,14 @@ const AdminMembersPage = () => {
             </div>
             <motion.select
               whileFocus={{ boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)' }}
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as any)}
               className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm sm:text-base"
             >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="all">All Types</option>
+              <option value="member">Member</option>
+              <option value="manager">Manager</option>
+              <option value="controller">Controller</option>
             </motion.select>
           </motion.div>
         </motion.div>
@@ -264,9 +374,8 @@ const AdminMembersPage = () => {
                   <tr>
                     <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase">Name</th>
                     <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase hidden md:table-cell">Email</th>
-                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase">Role</th>
-                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase hidden lg:table-cell">Meals</th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
+                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase hidden lg:table-cell">Mess Name</th>
                     <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
                   </tr>
                 </thead>
@@ -274,7 +383,7 @@ const AdminMembersPage = () => {
                   <AnimatePresence>
                     {filteredMembers.map((member, index) => (
                       <motion.tr
-                        key={member.id}
+                        key={member._id}
                         custom={index}
                         variants={rowVariants}
                         initial="hidden"
@@ -292,82 +401,106 @@ const AdminMembersPage = () => {
                         <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                           <motion.span
                             whileHover={{ scale: 1.05 }}
-                            className={`inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getRoleColor(member.role)}`}
+                            className={`inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getTypeColor(member.accountType)}`}
                           >
-                            {member.role === 'manager' && <MdSupervisorAccount size={12} />}
-                            {member.role === 'member' && <MdPerson size={12} />}
-                            <span className="hidden sm:inline">{member.role.charAt(0).toUpperCase() + member.role.slice(1)}</span>
-                            <span className="sm:hidden">{member.role === 'manager' ? 'Mgr' : member.role === 'admin' ? 'Adm' : 'Mem'}</span>
+                            {member.accountType === 'controller' && <MdSupervisorAccount size={12} />}
+                            {member.accountType === 'manager' && <MdPersonAdd size={12} />}
+                            {member.accountType === 'member' && <MdPerson size={12} />}
+                            <span className="hidden sm:inline">{member.accountType.charAt(0).toUpperCase() + member.accountType.slice(1)}</span>
+                            <span className="sm:hidden">{member.accountType === 'controller' ? 'Ctrl' : member.accountType === 'manager' ? 'Mgr' : 'Mem'}</span>
                           </motion.span>
                         </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                          <motion.span
-                            whileHover={{ scale: 1.05 }}
-                            className={`inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${getStatusColor(member.status)}`}
-                          >
-                            {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
-                          </motion.span>
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 hidden lg:table-cell text-xs sm:text-sm text-gray-600">{member.meals}</td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 hidden lg:table-cell text-xs sm:text-sm text-gray-600">{member.messName}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                           <motion.div className="flex justify-end gap-0.5 sm:gap-1 md:gap-2 flex-wrap">
-                            {member.status === 'pending' && (
+                            {member.accountType === 'member' && (
                               <>
                                 <motion.button
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleApproveMember(member.id)}
-                                  className="p-1 sm:p-1.5 md:p-2 bg-green-100 hover:bg-green-200 text-green-600 rounded-lg transition-all"
-                                  title="Approve"
+                                  onClick={() => handleMakeManager(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 disabled:bg-gray-200 text-orange-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Manager"
                                 >
-                                  <MdCheckCircle size={14} className="sm:hidden" />
-                                  <MdCheckCircle size={16} className="hidden sm:block" />
+                                  <MdPersonAdd size={14} className="sm:hidden" />
+                                  <MdPersonAdd size={16} className="hidden sm:block" />
                                 </motion.button>
                                 <motion.button
                                   whileHover={{ scale: 1.15 }}
                                   whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleRejectMember(member.id)}
-                                  className="p-1 sm:p-1.5 md:p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-all"
-                                  title="Reject"
+                                  onClick={() => handleMakeController(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-200 text-purple-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Controller"
                                 >
-                                  <MdClose size={14} className="sm:hidden" />
-                                  <MdClose size={16} className="hidden sm:block" />
+                                  <MdSupervisorAccount size={14} className="sm:hidden" />
+                                  <MdSupervisorAccount size={16} className="hidden sm:block" />
                                 </motion.button>
                               </>
                             )}
 
-                            {member.status === 'active' && member.role === 'member' && (
-                              <motion.button
-                                whileHover={{ scale: 1.15 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleMakeManager(member.id)}
-                                className="p-1 sm:p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-all"
-                                title="Make Manager"
-                              >
-                                <MdPersonAdd size={14} className="sm:hidden" />
-                                <MdPersonAdd size={16} className="hidden sm:block" />
-                              </motion.button>
+                            {member.accountType === 'manager' && (
+                              <>
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleMakeController(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-200 text-purple-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Controller"
+                                >
+                                  <MdSupervisorAccount size={14} className="sm:hidden" />
+                                  <MdSupervisorAccount size={16} className="hidden sm:block" />
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleMakeMember(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 disabled:bg-gray-200 text-blue-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Member"
+                                >
+                                  <MdPersonRemove size={14} className="sm:hidden" />
+                                  <MdPersonRemove size={16} className="hidden sm:block" />
+                                </motion.button>
+                              </>
                             )}
 
-                            {member.role === 'manager' && (
-                              <motion.button
-                                whileHover={{ scale: 1.15 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleRemoveManager(member.id)}
-                                className="p-1 sm:p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-all"
-                                title="Remove Manager"
-                              >
-                                <MdPersonRemove size={14} className="sm:hidden" />
-                                <MdPersonRemove size={16} className="hidden sm:block" />
-                              </motion.button>
+                            {member.accountType === 'controller' && (
+                              <>
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleMakeManager(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 disabled:bg-gray-200 text-orange-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Manager"
+                                >
+                                  <MdPersonAdd size={14} className="sm:hidden" />
+                                  <MdPersonAdd size={16} className="hidden sm:block" />
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleMakeMember(member._id)}
+                                  disabled={isUpdating}
+                                  className="p-1 sm:p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 disabled:bg-gray-200 text-blue-600 disabled:text-gray-400 rounded-lg transition-all"
+                                  title="Make Member"
+                                >
+                                  <MdPersonRemove size={14} className="sm:hidden" />
+                                  <MdPersonRemove size={16} className="hidden sm:block" />
+                                </motion.button>
+                              </>
                             )}
 
                             <motion.button
                               whileHover={{ scale: 1.15 }}
                               whileTap={{ scale: 0.9 }}
-                              onClick={() => handleDeleteMember(member.id)}
-                              className="p-1 sm:p-1.5 md:p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-all"
-                              title="Delete"
+                              onClick={() => handleDeleteUser(member._id)}
+                              disabled={isUpdating}
+                              className="p-1 sm:p-1.5 md:p-2 bg-red-100 hover:bg-red-200 disabled:bg-gray-200 text-red-600 disabled:text-gray-400 rounded-lg transition-all"
+                              title="Delete User"
                             >
                               <MdDelete size={14} className="sm:hidden" />
                               <MdDelete size={16} className="hidden sm:block" />
@@ -387,7 +520,7 @@ const AdminMembersPage = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="text-center py-8 sm:py-12"
               >
-                <p className="text-gray-500 text-sm sm:text-lg">No members found</p>
+                <p className="text-gray-500 text-sm sm:text-lg">No users found</p>
               </motion.div>
             )}
           </div>

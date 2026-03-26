@@ -18,12 +18,15 @@ interface MealDocument {
   _id?: any;
   userEmail: string;
   userName: string;
+  messName: string;
+  messSecretCode: string;
   month: string;
   year: number;
   monthName: string;
   meals: MealState;
   totalDays: number;
   totalMeals: number;
+  mealsUpToToday: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,15 +38,40 @@ const serializeMealData = (data: any): any => {
     _id: data._id?.toString() || '',
     userEmail: data.userEmail || '',
     userName: data.userName || '',
+    messName: data.messName || '',
+    messSecretCode: data.messSecretCode || '',
     month: data.month || '',
     year: data.year || 0,
     monthName: data.monthName || '',
     meals: data.meals || {},
     totalDays: data.totalDays || 0,
     totalMeals: data.totalMeals || 0,
+    mealsUpToToday: data.mealsUpToToday || 0,
     createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : data.createdAt || '',
     updatedAt: data.updatedAt instanceof Date ? data.updatedAt.toISOString() : data.updatedAt || '',
   };
+};
+
+const calculateMealsUpToToday = (meals: MealState): number => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+
+  let totalMeals = 0;
+
+  for (let day = 1; day <= currentDay; day++) {
+    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dayMeal = meals[dateStr];
+    
+    if (dayMeal) {
+      if (dayMeal.breakfast) totalMeals++;
+      if (dayMeal.lunch) totalMeals++;
+      if (dayMeal.dinner) totalMeals++;
+    }
+  }
+
+  return totalMeals;
 };
 
 export async function saveMealData(payload: {
@@ -75,6 +103,10 @@ export async function saveMealData(payload: {
 
     const userEmail = session.user.email;
     const userName = session.user.name || userEmail.split('@')[0];
+    const messName = (session.user as any)?.messName;
+    const messSecretCode = (session.user as any)?.messSecretCode;
+
+    const mealsUpToToday = calculateMealsUpToToday(meals);
 
     const mealCollection = await dbconnection<MealDocument>("meals");
 
@@ -99,6 +131,9 @@ export async function saveMealData(payload: {
               meals: meals,
               totalDays: totalDays,
               totalMeals: totalMeals,
+              mealsUpToToday: mealsUpToToday,
+              messName: messName,
+              messSecretCode: messSecretCode,
               updatedAt: currentDate,
             },
           }
@@ -108,17 +143,21 @@ export async function saveMealData(payload: {
           success: true,
           message: "✅ Meal data updated successfully",
           action: "update",
+          mealsUpToToday: mealsUpToToday,
         };
       } else {
         await mealCollection.insertOne({
           userEmail: userEmail,
           userName: userName,
+          messName: messName,
+          messSecretCode: messSecretCode,
           month: month,
           year: parseInt(year.toString()),
           monthName: monthName,
           meals: meals,
           totalDays: totalDays,
           totalMeals: totalMeals,
+          mealsUpToToday: mealsUpToToday,
           createdAt: currentDate,
           updatedAt: currentDate,
         } as MealDocument);
@@ -127,6 +166,7 @@ export async function saveMealData(payload: {
           success: true,
           message: "✅ Meal data saved successfully",
           action: "insert",
+          mealsUpToToday: mealsUpToToday,
         };
       }
     } catch (dbError) {
@@ -178,15 +218,34 @@ export async function loadMealData(month: string, year: number) {
         success: true,
         data: {
           meals: {},
+          mealsUpToToday: 0,
         },
       };
     }
+
+    const mealsUpToToday = calculateMealsUpToToday(mealData.meals);
+
+    await mealCollection.updateOne(
+      {
+        userEmail: userEmail,
+        month: month,
+        year: parseInt(year.toString()),
+      },
+      {
+        $set: {
+          mealsUpToToday: mealsUpToToday,
+        },
+      }
+    );
 
     const serializedData = serializeMealData(mealData);
 
     return {
       success: true,
-      data: serializedData,
+      data: {
+        ...serializedData,
+        mealsUpToToday: mealsUpToToday,
+      },
     };
   } catch (error) {
     console.error("Error in loadMealData:", error);

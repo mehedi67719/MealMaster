@@ -1,12 +1,12 @@
+'use client';
 
-"use client";
-
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { postuser } from "@/actions/server/auth";
-import { signIn } from "next-auth/react";
-import Swal from "sweetalert2";
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { postuser } from '@/actions/server/auth';
+import { getMessNames } from '@/actions/server/mess';
+import { signIn } from 'next-auth/react';
+import Swal from 'sweetalert2';
 
 interface UserData {
   name: string;
@@ -15,33 +15,99 @@ interface UserData {
   confirmPassword: string;
   accountType: string;
   messName: string;
-  selectedMess: string;
+  messSecretCode: string;
+  agreeToTerms: boolean;
 }
 
 export default function SignupPage() {
   const router = useRouter();
   const [formData, setFormData] = useState<UserData>({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    accountType: "member",
-    messName: "",
-    selectedMess: "",
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    accountType: 'member',
+    messName: '',
+    messSecretCode: '',
+    agreeToTerms: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Partial<UserData>>({});
+  const [messList, setMessList] = useState<string[]>([]);
+  const [isLoadingMesses, setIsLoadingMesses] = useState(true);
+
+  useEffect(() => {
+    const loadMesses = async () => {
+      try {
+        setIsLoadingMesses(true);
+        const result = await getMessNames();
+        if (result.success) {
+          setMessList(result.data);
+        } else {
+          console.error('Failed to load messes:', result.error);
+        }
+      } catch (error) {
+        console.error('Error loading messes:', error);
+      } finally {
+        setIsLoadingMesses(false);
+      }
+    };
+
+    loadMesses();
+  }, []);
+
+  const validateForm = (): boolean => {
+    const newErrors: Partial<UserData> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Invalid email format';
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (!formData.messName) {
+      newErrors.messName = 'Please select a mess';
+    }
+
+    if (!formData.messSecretCode.trim()) {
+      newErrors.messSecretCode = 'Mess secret code is required';
+    }
+
+    if (!formData.agreeToTerms) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Agreement Required',
+        text: 'You must agree to the Terms of Service and Privacy Policy to continue.',
+        confirmButtonColor: '#f59e0b',
+      });
+      return false;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      Swal.fire({
-        icon: "error",
-        title: "Password Mismatch",
-        text: "Password and confirm password do not match",
-        confirmButtonColor: "#f59e0b",
-      });
+
+    if (!validateForm()) {
       return;
     }
 
@@ -49,30 +115,21 @@ export default function SignupPage() {
 
     try {
       const user = {
-        name: formData.name,
-        email: formData.email,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         accountType: formData.accountType,
         messName: formData.messName,
-        selectedMess: formData.selectedMess,
+        messSecretCode: formData.messSecretCode.trim(),
+        selectedMess: formData.messName,
+        memberSecretCode: formData.messSecretCode.trim(),
+        agreeToTerms: formData.agreeToTerms,
       };
-      
-      const result = await postuser(user);
-      
-      if (result.success) {
-  
-        // await Swal.fire({
-        //   icon: "success",
-        //   title: "Registration Successful!",
-        //   text: "Your account has been created successfully. Logging you in...",
-        //   confirmButtonColor: "#f59e0b",
-        //   timer: 1500,
-        //   timerProgressBar: true,
-        //   showConfirmButton: false,
-        // });
 
-  
+      const result = await postuser(user);
+
+      if (result.success) {
         const loginResult = await signIn('credentials', {
           redirect: false,
           email: formData.email,
@@ -81,43 +138,42 @@ export default function SignupPage() {
 
         if (loginResult?.ok) {
           await Swal.fire({
-            icon: "success",
-            title: "Welcome!",
-            text: "You have been successfully logged in.",
-            confirmButtonColor: "#f59e0b",
-            confirmButtonText: "Continue",
+            icon: 'success',
+            title: 'Welcome!',
+            text: 'You have been successfully logged in.',
+            confirmButtonColor: '#f59e0b',
+            confirmButtonText: 'Continue',
             timer: 2000,
             timerProgressBar: true,
           });
-          
-     
+
           router.push('/');
           router.refresh();
         } else {
           Swal.fire({
-            icon: "info",
-            title: "Registration Complete",
-            text: "Please login with your credentials.",
-            confirmButtonColor: "#f59e0b",
-            confirmButtonText: "Go to Login",
+            icon: 'info',
+            title: 'Registration Complete',
+            text: 'Please login with your credentials.',
+            confirmButtonColor: '#f59e0b',
+            confirmButtonText: 'Go to Login',
           }).then(() => {
             router.push('/login');
           });
         }
       } else {
         Swal.fire({
-          icon: "error",
-          title: "Registration Failed",
-          text: result.message || "Something went wrong. Please try again.",
-          confirmButtonColor: "#f59e0b",
+          icon: 'error',
+          title: 'Registration Failed',
+          text: result.message || 'Something went wrong. Please try again.',
+          confirmButtonColor: '#f59e0b',
         });
       }
     } catch (error) {
       Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "An error occurred. Please try again later.",
-        confirmButtonColor: "#f59e0b",
+        icon: 'error',
+        title: 'Error',
+        text: 'An error occurred. Please try again later.',
+        confirmButtonColor: '#f59e0b',
       });
     } finally {
       setIsLoading(false);
@@ -125,19 +181,28 @@ export default function SignupPage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+    const { name, value, type } = e.target;
 
-  const existingMesses: string[] = [
-    "Green View Mess",
-    "Sea Beach Mess",
-    "City Tower Mess",
-    "Garden Palace Mess",
-    "Star Light Mess",
-  ];
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData({
+        ...formData,
+        [name]: checked,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
+
+    if (errors[name as keyof UserData]) {
+      setErrors({
+        ...errors,
+        [name]: undefined,
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -164,12 +229,14 @@ export default function SignupPage() {
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                      errors.name ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="John Doe"
-                    required
                     disabled={isLoading}
                   />
                 </div>
+                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
               </div>
 
               <div>
@@ -183,12 +250,14 @@ export default function SignupPage() {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                      errors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="you@example.com"
-                    required
                     disabled={isLoading}
                   />
                 </div>
+                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
               </div>
 
               <div>
@@ -202,7 +271,6 @@ export default function SignupPage() {
                     value={formData.accountType}
                     onChange={handleChange}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none bg-white"
-                    required
                     disabled={isLoading}
                   >
                     <option value="member">Member</option>
@@ -210,64 +278,105 @@ export default function SignupPage() {
                   </select>
                   <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Select how you want to register
-                </p>
               </div>
 
-              {formData.accountType === "controller" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Mess Name
-                  </label>
-                  <div className="relative">
-                    <i className="fas fa-building absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input
-                      type="text"
-                      name="messName"
-                      value={formData.messName}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      placeholder="Enter your mess name"
-                      required
-                      disabled={isLoading}
-                    />
+              {formData.accountType === 'member' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mess Name
+                    </label>
+                    <div className="relative">
+                      <i className="fas fa-building absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                      <select
+                        name="messName"
+                        value={formData.messName}
+                        onChange={handleChange}
+                        className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none bg-white ${
+                          errors.messName ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        disabled={isLoading || isLoadingMesses}
+                      >
+                        <option value="">
+                          {isLoadingMesses ? 'Loading messes...' : 'Select a mess'}
+                        </option>
+                        {messList.length > 0 ? (
+                          messList.map((mess) => (
+                            <option key={mess} value={mess}>
+                              {mess}
+                            </option>
+                          ))
+                        ) : (
+                          <option disabled>No messes available</option>
+                        )}
+                      </select>
+                      <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                    </div>
+                    {errors.messName && (
+                      <p className="text-red-500 text-xs mt-1">{errors.messName}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select your mess from the list
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter the name of your mess
-                  </p>
-                </div>
+                </>
               )}
 
-              {formData.accountType === "member" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Select Your Mess
-                  </label>
-                  <div className="relative">
-                    <i className="fas fa-users absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <select
-                      name="selectedMess"
-                      value={formData.selectedMess}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none bg-white"
-                      required
-                      disabled={isLoading}
-                    >
-                      <option value="">Select a mess</option>
-                      {existingMesses.map((mess: string) => (
-                        <option key={mess} value={mess}>
-                          {mess}
-                        </option>
-                      ))}
-                    </select>
-                    <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+              {formData.accountType === 'controller' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mess Name
+                    </label>
+                    <div className="relative">
+                      <i className="fas fa-building absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                      <input
+                        type="text"
+                        name="messName"
+                        value={formData.messName}
+                        onChange={handleChange}
+                        className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                          errors.messName ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Enter your mess name"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    {errors.messName && <p className="text-red-500 text-xs mt-1">{errors.messName}</p>}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter the name of your mess
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Choose your mess from the list
-                  </p>
-                </div>
+                </>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mess Secret Code
+                </label>
+                <div className="relative">
+                  <i className="fas fa-key absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <input
+                    type="text"
+                    name="messSecretCode"
+                    value={formData.messSecretCode}
+                    onChange={handleChange}
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                      errors.messSecretCode ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter secret code"
+                    disabled={isLoading}
+                  />
+                </div>
+                {errors.messSecretCode && (
+                  <p className="text-red-500 text-xs mt-1">{errors.messSecretCode}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.accountType === 'controller'
+                    ? 'Enter your mess secret code for verification'
+                    : 'Enter the secret code provided by your mess controller'}
+                </p>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -280,12 +389,14 @@ export default function SignupPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                      errors.password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="••••••••"
-                    required
                     disabled={isLoading}
                   />
                 </div>
+                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
               </div>
 
               <div>
@@ -299,54 +410,76 @@ export default function SignupPage() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                      errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="••••••••"
-                    required
                     disabled={isLoading}
                   />
                 </div>
+                {errors.confirmPassword && (
+                  <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
+                )}
               </div>
 
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                  required
+                  name="agreeToTerms"
+                  checked={formData.agreeToTerms}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   disabled={isLoading}
                 />
-                <span className="text-gray-600">
-                  I agree to the{" "}
-                  <a href="#" className="text-amber-600 hover:text-amber-700">
+                <label className="text-sm text-gray-600 cursor-pointer flex-1">
+                  I agree to the{' '}
+                  <a href="#" className="text-amber-600 hover:text-amber-700 font-medium">
                     Terms of Service
-                  </a>{" "}
-                  and{" "}
-                  <a href="#" className="text-amber-600 hover:text-amber-700">
+                  </a>{' '}
+                  and{' '}
+                  <a href="#" className="text-amber-600 hover:text-amber-700 font-medium">
                     Privacy Policy
                   </a>
-                </span>
+                </label>
               </div>
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !formData.agreeToTerms}
                 className="w-full bg-amber-500 text-white py-2 rounded-lg font-semibold hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Creating Account...
                   </span>
                 ) : (
-                  "Sign Up"
+                  'Sign Up'
                 )}
               </button>
             </form>
 
             <p className="mt-6 text-center text-sm text-gray-500">
-              Already have an account?{" "}
+              Already have an account?{' '}
               <Link href="/login" className="text-amber-600 hover:text-amber-700 font-medium">
                 Sign in
               </Link>
